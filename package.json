@@ -1,0 +1,47 @@
+{
+  "name": "new-2-of-tal-avenue-staff-housing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react-dom": "^19.2.0",
+    "react": "^19.2.0",
+    "react-router-dom": "^7.9.5",
+    "recharts": "^3.3.0",
+    "@testing-library/react": "^16.3.0",
+    "@jest/globals": "^30.2.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jspdf": "^3.0.3",
+    "xlsx": "^0.18.5",
+    "jspdf-autotable": "^5.0.2",
+    "@google/genai": "^1.29.0",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^4.1.12",
+    "multer": "^2.0.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "@prisma/client": "^6.19.0",
+    "morgan": "^1.10.1",
+    "bcryptjs": "^3.0.3",
+    "winston": "^3.18.3",
+    "fs": "^0.0.1-security",
+    "http-status": "^2.1.0",
+    "dotenv": "^17.2.3",
+    "winston-daily-rotate-file": "^5.0.0",
+    "path": "^0.12.7",
+    "child_process": "^1.0.2",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

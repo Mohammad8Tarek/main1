@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tal Avenue Staff Housing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              arabic: ['Cairo', 'sans-serif'],
+            },
+            colors: {
+              primary: {
+                '50': '#F1F7FA',
+                '100': '#E4EFF5',
+                '200': '#C8DFEB',
+                '300': '#ADD0E1',
+                '400': '#75B1D2',
+                '500': '#5294BF',
+                '600': '#3A7CA5',
+                '700': '#326A8D',
+                '800': '#295672',
+                '900': '#21445A',
+                '950': '#172E3E',
+              },
+              slate: {
+                '50': '#F5F8FA',
+                '100': '#EAEFF4',
+                '200': '#DCE3EB',
+                '300': '#C1CEDE',
+                '400': '#A6B8D0',
+                '500': '#8B9DBB',
+                '600': '#6B7A8C',
+                '700': '#506175',
+                '800': '#3F4D5C',
+                '900': '#2E3A46',
+                '950': '#252F3A',
+              },
+            },
+            animation: {
+              'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .dark .dark-bg-pattern {
+        background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
+        background-size: 20px 20px;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.5",
+    "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
+    "@testing-library/react": "https://aistudiocdn.com/@testing-library/react@^16.3.0",
+    "@jest/globals": "https://aistudiocdn.com/@jest/globals@^30.2.0",
+    "@testing-library/jest-dom": "https://aistudiocdn.com/@testing-library/jest-dom@^6.9.1",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^5.0.2",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
+    "jsonwebtoken": "https://aistudiocdn.com/jsonwebtoken@^9.0.2",
+    "zod": "https://aistudiocdn.com/zod@^4.1.12",
+    "multer": "https://aistudiocdn.com/multer@^2.0.2",
+    "cors": "https://aistudiocdn.com/cors@^2.8.5",
+    "express": "https://aistudiocdn.com/express@^5.1.0",
+    "helmet": "https://aistudiocdn.com/helmet@^8.1.0",
+    "@prisma/client": "https://aistudiocdn.com/@prisma/client@^6.19.0",
+    "morgan": "https://aistudiocdn.com/morgan@^1.10.1",
+    "bcryptjs": "https://aistudiocdn.com/bcryptjs@^3.0.3",
+    "winston": "https://aistudiocdn.com/winston@^3.18.3",
+    "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
+    "http-status": "https://aistudiocdn.com/http-status@^2.1.0",
+    "dotenv": "https://aistudiocdn.com/dotenv@^17.2.3",
+    "winston-daily-rotate-file": "https://aistudiocdn.com/winston-daily-rotate-file@^5.0.0",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "child_process": "https://aistudiocdn.com/child_process@^1.0.2",
+    "node-cron": "https://aistudiocdn.com/node-cron@^4.2.1"
+  }
+}
+</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+</head>
+  <body class="bg-slate-50 dark:bg-slate-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
