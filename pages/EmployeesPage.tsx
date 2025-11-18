@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Employee, DEPARTMENTS, departmentJobTitles, Assignment, Room } from '../types';
-import { employeeApi, assignmentApi, roomApi } from '../services/apiService';
+import { employeeApi, logActivity, assignmentApi, roomApi } from '../services/apiService';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -35,13 +34,13 @@ const EmployeesPage: React.FC = () => {
     const { user } = useAuth();
     const { language, t } = useLanguage();
     const { showToast } = useToast();
-    const canManage = user?.roles?.some(r => ['super_admin', 'admin', 'hr'].includes(r));
+    const canManage = user?.role && ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(user.role);
     const { settings: exportSettings } = useExportSettings();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [formData, setFormData] = useState({
-        employeeId: '', firstName: '', lastName: '', nationalId: '', jobTitle: '', phone: '', department: '', status: 'active' as Employee['status'], contractEndDate: '',
+        employeeId: '', firstName: '', lastName: '', nationalId: '', jobTitle: '', phone: '', department: '', status: 'ACTIVE' as Employee['status'], contractEndDate: '',
     });
     
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +55,7 @@ const EmployeesPage: React.FC = () => {
     // Bulk action states
     const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
     const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
-    const [bulkStatus, setBulkStatus] = useState<Employee['status']>('active');
+    const [bulkStatus, setBulkStatus] = useState<Employee['status']>('ACTIVE');
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -72,25 +71,15 @@ const EmployeesPage: React.FC = () => {
                 roomApi.getAll()
             ]);
             setEmployees(data);
-            setAssignments(assignmentsData as Assignment[]);
-            setRooms(roomsData as Room[]);
+            setAssignments(assignmentsData);
+            setRooms(roomsData);
         } catch (error) {
             console.error("Failed to fetch employees", error);
             showToast(t('errors.fetchFailed'), 'error');
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { 
-        fetchEmployees(); 
-        const handleDataChange = (e: Event) => {
-             const detail = (e as CustomEvent).detail;
-             if (['Employee', 'Assignment', 'Room'].includes(detail?.table)) {
-                fetchEmployees();
-             }
-        };
-        window.addEventListener('datachanged', handleDataChange);
-        return () => window.removeEventListener('datachanged', handleDataChange);
-    }, []);
+    useEffect(() => { fetchEmployees(); }, []);
     
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
@@ -129,7 +118,7 @@ const EmployeesPage: React.FC = () => {
             jobTitle: firstJobTitle, 
             phone: '', 
             department: firstDepartment, 
-            status: 'active', 
+            status: 'ACTIVE', 
             contractEndDate: new Date().toISOString().split('T')[0] 
         });
         setIsModalOpen(true);
@@ -166,18 +155,21 @@ const EmployeesPage: React.FC = () => {
         setIsSubmitting(true);
         try {
             const submissionData = { ...formData, contractEndDate: new Date(formData.contractEndDate).toISOString() };
+            const fullName = `${formData.firstName} ${formData.lastName}`;
             if (editingEmployee) {
                 await employeeApi.update(editingEmployee.id, submissionData);
+                logActivity(user!.username, `Updated employee: ${fullName}`);
                 showToast(t('employees.updated'), 'success');
             } else {
                 await employeeApi.create(submissionData);
+                logActivity(user!.username, `Created employee: ${fullName}`);
                 showToast(t('employees.added'), 'success');
             }
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Employee' } }));
             setIsModalOpen(false);
-        } catch (error) {
+            await fetchEmployees();
+        } catch (error: any) {
             console.error("Failed to save employee", error);
-            showToast(t('errors.generic'), 'error');
+            showToast(error.message || t('errors.generic'), 'error');
         } finally { setIsSubmitting(false); }
     };
     
@@ -186,8 +178,9 @@ const EmployeesPage: React.FC = () => {
         setIsSubmitting(true);
         try {
             await employeeApi.delete(employee.id);
+            logActivity(user!.username, `Deleted employee: ${employee.firstName} ${employee.lastName}`);
             showToast(t('employees.deleted'), 'success');
-             window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Employee' } }));
+            await fetchEmployees();
         } catch (error: any) {
             showToast(error.message || t('errors.generic'), 'error');
         } finally { 
@@ -196,7 +189,7 @@ const EmployeesPage: React.FC = () => {
     };
 
     const getStatusBadge = (status: Employee['status']) => {
-        return status === 'active' 
+        return status === 'ACTIVE' 
             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
             : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
     };
@@ -214,11 +207,12 @@ const EmployeesPage: React.FC = () => {
                 t(`departments.${emp.department}`),
                 emp.jobTitle,
                 emp.phone,
-                t(`statuses.${emp.status}`),
+                t(`statuses.${emp.status.toLowerCase()}`),
                 new Date(emp.contractEndDate).toLocaleDateString()
             ]);
             const filename = `report_employees_${new Date().toISOString().split('T')[0]}.pdf`;
             exportToPdf({ headers, data, title: t('employees.reportTitle'), filename, settings: exportSettings, language });
+            logActivity(user!.username, `Exported employees to PDF`);
         } catch (error) {
             console.error("PDF Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -241,11 +235,12 @@ const EmployeesPage: React.FC = () => {
                 t(`departments.${emp.department}`),
                 emp.jobTitle,
                 emp.phone,
-                t(`statuses.${emp.status}`),
+                t(`statuses.${emp.status.toLowerCase()}`),
                 new Date(emp.contractEndDate).toLocaleDateString()
             ]);
             const filename = `report_employees_${new Date().toISOString().split('T')[0]}.xlsx`;
             exportToExcel({ headers, data, filename, settings: exportSettings });
+            logActivity(user!.username, `Exported employees to Excel`);
         } catch (error) {
             console.error("Excel Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -367,7 +362,7 @@ const EmployeesPage: React.FC = () => {
             }
             
             const statusValueRaw = String(row.status || '').toLowerCase().trim();
-            const statusKey = statusValueRaw === 'active' || statusValueRaw === translations.ar.statuses.active.toLowerCase() ? 'active' : (statusValueRaw === 'left' || statusValueRaw === translations.ar.statuses.left.toLowerCase() ? 'left' : null);
+            const statusKey = statusValueRaw === 'active' || statusValueRaw === translations.ar.statuses.active.toLowerCase() ? 'ACTIVE' : (statusValueRaw === 'left' || statusValueRaw === translations.ar.statuses.left.toLowerCase() ? 'LEFT' : null);
             if (!error && !statusKey) {
                 error = t('employees.import.error.invalidStatus', { value: String(row.status) });
             }
@@ -401,17 +396,15 @@ const EmployeesPage: React.FC = () => {
     const handleConfirmImport = async () => {
         setIsSubmitting(true);
         const results = await Promise.allSettled(
-            importResults.valid.map(emp => employeeApi.create(emp))
+            importResults.valid.map(emp => employeeApi.create(emp).then(newEmp => logActivity(user!.username, `Imported employee: ${newEmp.firstName} ${newEmp.lastName}`)))
         );
         const successCount = results.filter(r => r.status === 'fulfilled').length;
         const totalCount = importResults.valid.length;
-        if (successCount > 0) {
-            showToast(t('employees.import.success', { successCount }), 'success');
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Employee' } }));
-        }
+        if (successCount > 0) showToast(t('employees.import.success', { successCount }), 'success');
         if (successCount < totalCount) showToast(t('employees.import.partialSuccess', { successCount, totalCount, errorCount: totalCount - successCount }), 'error');
         setIsImportModalOpen(false);
         setImportResults({ valid: [], errors: [] });
+        await fetchEmployees();
         setIsSubmitting(false);
     };
     
@@ -446,23 +439,26 @@ const EmployeesPage: React.FC = () => {
             const updatePromises = employeesToUpdate.map(emp => employeeApi.update(emp.id, { status: bulkStatus }));
             await Promise.all(updatePromises);
             
-            // If status is 'left', check them out
-            if (bulkStatus === 'left') {
+            // If status is 'LEFT', check them out
+            if (bulkStatus === 'LEFT') {
                 const checkoutPromises: Promise<any>[] = [];
                 employeesToUpdate.forEach(emp => {
                     const assignment = assignments.find(a => a.employeeId === emp.id && !a.checkOutDate);
                     if (assignment) {
-                        checkoutPromises.push(assignmentApi.checkout(assignment.id, new Date().toISOString()));
+                        checkoutPromises.push(assignmentApi.checkout(assignment.id));
+                        const room = rooms.find(r => r.id === assignment.roomId);
+                        if (room && room.currentOccupancy > 0) {
+                            checkoutPromises.push(roomApi.update(room.id, { currentOccupancy: room.currentOccupancy - 1, status: 'AVAILABLE' }));
+                        }
                     }
                 });
                 await Promise.all(checkoutPromises);
             }
             
+            logActivity(user!.username, `Bulk updated status to ${bulkStatus} for ${employeesToUpdate.length} employees.`);
             showToast(t('employees.bulkStatusUpdated', { count: employeesToUpdate.length }), 'success');
             
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Employee' } }));
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Assignment' } }));
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'Room' } }));
+            await fetchEmployees();
             setSelectedEmployees(new Set());
         } catch (error) {
             showToast(t('errors.generic'), 'error');
@@ -495,8 +491,8 @@ const EmployeesPage: React.FC = () => {
                                 <label htmlFor="status-filter" className="sr-only">{t('employees.status')}</label>
                                 <select id="status-filter" aria-label={t('employees.status')} value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-slate-700 dark:border-slate-600">
                                     <option value="all">{t('employees.allStatuses')}</option>
-                                    <option value="active">{t('statuses.active')}</option>
-                                    <option value="left">{t('statuses.left')}</option>
+                                    <option value="ACTIVE">{t('statuses.active')}</option>
+                                    <option value="LEFT">{t('statuses.left')}</option>
                                 </select>
                             </div>
                             <div>
@@ -552,11 +548,11 @@ const EmployeesPage: React.FC = () => {
                                             <td className="px-6 py-4">{emp.nationalId}</td>
                                             <td className="px-6 py-4">{t(`departments.${emp.department}`)}</td>
                                             <td className="px-6 py-4">{emp.jobTitle}</td>
-                                            <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(emp.status)}`}>{t(`statuses.${emp.status}`)}</span></td>
+                                            <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(emp.status)}`}>{t(`statuses.${emp.status.toLowerCase()}`)}</span></td>
                                             {canManage && (
                                                 <td className="px-6 py-4 space-x-4 rtl:space-x-reverse">
                                                     <button onClick={() => openEditModal(emp)} className="font-medium text-primary-600 dark:text-primary-500 hover:underline">{t('edit')}</button>
-                                                    {user?.roles?.includes('admin') && (
+                                                    {user?.role === 'ADMIN' && (
                                                         <button onClick={() => handleDelete(emp)} className="font-medium text-red-600 dark:text-red-500 hover:underline">{t('delete')}</button>
                                                     )}
                                                 </td>
@@ -589,7 +585,7 @@ const EmployeesPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.firstName')}</label><input type="text" name="firstName" value={formData.firstName} onChange={handleFormChange} required className={formInputClass}/></div>
                                 <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.lastName')}</label><input type="text" name="lastName" value={formData.lastName} onChange={handleFormChange} required className={formInputClass}/></div>
-                                <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.phone')}</label><input type="text" name="phone" value={formData.phone || ''} onChange={handleFormChange} required className={formInputClass}/></div>
+                                <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.phone')}</label><input type="text" name="phone" value={formData.phone} onChange={handleFormChange} required className={formInputClass}/></div>
 
                                 <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.employeeId')}</label><input type="text" name="employeeId" value={formData.employeeId} onChange={handleFormChange} required className={formInputClass}/></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.nationalId')}</label><input type="text" name="nationalId" value={formData.nationalId} onChange={handleFormChange} required className={formInputClass}/></div>
@@ -614,7 +610,7 @@ const EmployeesPage: React.FC = () => {
                                     </select>
                                 </div>
                                 <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.contractEndDate')}</label><input type="date" name="contractEndDate" value={formData.contractEndDate} onChange={handleFormChange} required className={formInputClass}/></div>
-                                {editingEmployee && (<div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="active">{t('statuses.active')}</option><option value="left">{t('statuses.left')}</option></select></div>)}
+                                {editingEmployee && (<div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="ACTIVE">{t('statuses.active')}</option><option value="LEFT">{t('statuses.left')}</option></select></div>)}
                             </div>
                             <div className="flex justify-end gap-4 mt-6">
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500 rounded">{t('cancel')}</button>
@@ -662,12 +658,12 @@ const EmployeesPage: React.FC = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
                         <h2 className="text-xl font-bold mb-4">{t('employees.bulkStatusModalTitle')}</h2>
-                        <p className="mb-4 text-slate-600 dark:text-slate-400">{t('employees.confirmBulkStatusChange', { count: selectedEmployees.size, status: t(`statuses.${bulkStatus}`) })}</p>
+                        <p className="mb-4 text-slate-600 dark:text-slate-400">{t('employees.confirmBulkStatusChange', { count: selectedEmployees.size, status: t(`statuses.${bulkStatus.toLowerCase()}`) })}</p>
                         <div className="mb-6">
                             <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('employees.newStatus')}</label>
                             <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value as any)} className={formInputClass}>
-                                <option value="active">{t('statuses.active')}</option>
-                                <option value="left">{t('statuses.left')}</option>
+                                <option value="ACTIVE">{t('statuses.active')}</option>
+                                <option value="LEFT">{t('statuses.left')}</option>
                             </select>
                         </div>
                         <div className="flex justify-end gap-4">

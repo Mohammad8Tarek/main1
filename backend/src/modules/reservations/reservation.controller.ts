@@ -1,38 +1,39 @@
+
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import asyncHandler from '../../utils/asyncHandler';
 import { reservationService } from './reservation.service';
 import ApiResponse from '../../utils/apiResponse';
 
-const createReservation = asyncHandler(async (req: Request, res: Response) => {
-    const reservation = await reservationService.createReservation(req.body);
-    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, reservation, 'Reservation created successfully'));
+const create = asyncHandler(async (req: Request, res: Response) => {
+    const result = await reservationService.create(req.body);
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, result, 'Reservation created'));
 });
 
-const getAllReservations = asyncHandler(async (req: Request, res: Response) => {
-    const reservations = await reservationService.getAllReservations();
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, reservations));
+const getAll = asyncHandler(async (req: Request, res: Response) => {
+    const results = await reservationService.getAll();
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, results));
 });
 
-const getReservationById = asyncHandler(async (req: Request, res: Response) => {
-    const reservation = await reservationService.getReservationById(req.params.id);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, reservation));
+const getById = asyncHandler(async (req: Request, res: Response) => {
+    const result = await reservationService.getById(req.params.id);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, result));
 });
 
-const updateReservation = asyncHandler(async (req: Request, res: Response) => {
-    const reservation = await reservationService.updateReservation(req.params.id, req.body);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, reservation, 'Reservation updated successfully'));
+const update = asyncHandler(async (req: Request, res: Response) => {
+    const result = await reservationService.update(req.params.id, req.body);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, result, 'Reservation updated'));
 });
 
-const deleteReservation = asyncHandler(async (req: Request, res: Response) => {
-    await reservationService.deleteReservation(req.params.id);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Reservation deleted successfully'));
+const deleteById = asyncHandler(async (req: Request, res: Response) => {
+    await reservationService.delete(req.params.id);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Reservation deleted'));
 });
 
 export const reservationController = {
-    createReservation,
-    getAllReservations,
-    getReservationById,
-    updateReservation,
-    deleteReservation,
+    create,
+    getAll,
+    getById,
+    update,
+    delete: deleteById,
 };

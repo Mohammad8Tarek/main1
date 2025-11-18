@@ -1,14 +1,12 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { Notification } from '../context/ToastContext';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 import ExportSettingsModal from '../components/settings/ExportSettingsModal';
-// FIX: Removed unused `logActivity` import as this is handled by the backend.
-import { userApi } from '../services/apiService';
+import { userApi, logActivity } from '../services/apiService';
 
 interface ChangePasswordModalProps {
     isOpen: boolean;
@@ -59,10 +57,10 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen, onClo
         try {
             if (!user) throw new Error("User not found");
             await userApi.changePassword({
-                userId: user.id,
                 currentPassword,
                 newPassword,
             });
+            logActivity(user.username, 'Changed password');
             showToast(t('changePassword.success'), 'success');
             onClose();
         } catch (err: any) {
@@ -225,18 +223,18 @@ const Layout: React.FC<LayoutProps> = ({ theme, toggleTheme }) => {
     };
   }, []);
 
-  const userRoles = user?.roles || [];
-  const isSuperAdminOrAdmin = userRoles.some(r => ['super_admin', 'admin'].includes(r));
+  const userRole = user?.role;
+  const isSuperAdminOrAdmin = userRole && ['SUPER_ADMIN', 'ADMIN'].includes(userRole);
 
-  const housingAndGeneralRoles: User['roles'][number][] = ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'viewer'];
-  const maintenanceRoles: User['roles'][number][] = ['super_admin', 'admin', 'manager', 'supervisor', 'maintenance', 'viewer'];
+  const housingAndGeneralRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'HR', 'VIEWER'];
+  const maintenanceRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'MAINTENANCE', 'VIEWER'];
 
   const navLinks = [
     { to: "/", icon: "fa-gauge-high", label: t('layout.dashboard'), visible: true },
-    { to: "/housing", icon: "fa-building", label: t('layout.housing'), visible: housingAndGeneralRoles.some(r => userRoles.includes(r)) },
-    { to: "/employees", icon: "fa-users", label: t('layout.employees'), visible: housingAndGeneralRoles.some(r => userRoles.includes(r)) },
-    { to: "/reservations", icon: "fa-calendar-check", label: t('layout.reservations'), visible: housingAndGeneralRoles.some(r => userRoles.includes(r)) },
-    { to: "/maintenance", icon: "fa-wrench", label: t('layout.maintenance'), visible: maintenanceRoles.some(r => userRoles.includes(r)) },
+    { to: "/housing", icon: "fa-building", label: t('layout.housing'), visible: userRole && housingAndGeneralRoles.includes(userRole) },
+    { to: "/employees", icon: "fa-users", label: t('layout.employees'), visible: userRole && housingAndGeneralRoles.includes(userRole) },
+    { to: "/reservations", icon: "fa-calendar-check", label: t('layout.reservations'), visible: userRole && housingAndGeneralRoles.includes(userRole) },
+    { to: "/maintenance", icon: "fa-wrench", label: t('layout.maintenance'), visible: userRole && maintenanceRoles.includes(userRole) },
     { to: "/users", icon: "fa-user-cog", label: t('layout.userManagement'), visible: isSuperAdminOrAdmin },
     { to: "/activity-log", icon: "fa-clock-rotate-left", label: t('layout.activityLog'), visible: isSuperAdminOrAdmin },
     { to: "/settings", icon: "fa-cogs", label: t('layout.settings'), visible: isSuperAdminOrAdmin },
@@ -269,9 +267,11 @@ const Layout: React.FC<LayoutProps> = ({ theme, toggleTheme }) => {
               <button onClick={toggleTheme} className="p-2 text-slate-500 rounded-lg hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700">
                 {theme === 'light' ? <i className="fa-solid fa-moon text-xl"></i> : <i className="fa-solid fa-sun text-xl"></i>}
               </button>
-               <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 text-slate-500 rounded-lg hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700">
-                <i className="fa-solid fa-cog text-xl"></i>
-               </button>
+               {isSuperAdminOrAdmin && (
+                 <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 text-slate-500 rounded-lg hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700">
+                  <i className="fa-solid fa-cog text-xl"></i>
+                 </button>
+               )}
 
               <div className="relative" ref={notificationDropdownRef}>
                   <button onClick={handleBellClick} className="p-2 relative text-slate-500 rounded-lg hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700">
@@ -323,7 +323,7 @@ const Layout: React.FC<LayoutProps> = ({ theme, toggleTheme }) => {
                        </div>
                        <div className="flex items-center">
                           <i className="fa-solid fa-shield-halved w-4 text-slate-400" aria-hidden="true"></i>
-                          <span className="ms-2 block text-sm font-medium text-slate-500 truncate dark:text-slate-400">{user?.roles.map(r => t(`roles.${r}`)).join(', ')}</span>
+                          <span className="ms-2 block text-sm font-medium text-slate-500 truncate dark:text-slate-400">{user?.role ? t(`roles.${user.role.toLowerCase()}`) : ''}</span>
                        </div>
                     </div>
                     <ul className="py-1" aria-labelledby="dropdown">

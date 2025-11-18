@@ -107,11 +107,11 @@ export const translations = {
         housing_section: 'Housing Section'
     },
     login: {
-        title: 'LOG IN',
+        title: 'LOGIN',
         subtitle: 'Welcome back! Please enter your details.',
         username: 'Username',
         password: 'Password',
-        loginButton: 'LOG IN',
+        loginButton: 'Login',
         rememberMe: 'Remember me',
         forgotPassword: 'Forgot Password?',
         fillFields: 'Please fill in all fields.',

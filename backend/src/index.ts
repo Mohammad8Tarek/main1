@@ -1,8 +1,8 @@
 
 import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-// import cors from 'cors'; // Replaced with manual middleware
 import config from './config';
 import logger from './utils/logger';
 import { errorMiddleware } from './middleware/error.middleware';
@@ -14,49 +14,47 @@ import authRoutes from './modules/auth/auth.route';
 import userRoutes from './modules/users/user.route';
 import employeeRoutes from './modules/employees/employee.route';
 import buildingRoutes from './modules/buildings/building.route';
+import floorRoutes from './modules/floors/floor.route';
 import roomRoutes from './modules/rooms/room.route';
 import assignmentRoutes from './modules/assignments/assignment.route';
 import maintenanceRoutes from './modules/maintenance/maintenance.route';
 import reservationRoutes from './modules/reservations/reservation.route';
 import hostingRoutes from './modules/hostings/hosting.route';
-import activityLogRoutes from './modules/activity-log/activity-log.route';
-import systemSettingsRoutes from './modules/system-settings/system-settings.route';
 import uploadRoutes from './modules/uploads/upload.route';
-// import { initializeCronJobs } from './jobs';
+import settingsRoutes from './modules/settings/settings.route';
+import activityLogRoutes from './modules/activitylog/activitylog.route';
+import { initializeCronJobs } from './jobs';
 
 
 const app: Express = express();
 
-// Custom CORS Middleware to handle browser security policies
-app.use((req: Request, res: Response, next: NextFunction) => {
-    // Dynamically allow the origin of the request.
-    // In a production environment, this should be a whitelist.
-    const origin = req.headers.origin;
-    if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-    
-    // Request methods you wish to allow
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-
-    // Request headers you wish to allow
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
-
-    // Set to true if you need the website to include cookies in the requests sent
-    // to the API (e.g. in case you use sessions)
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    // Handle pre-flight requests
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-
-    next();
-});
-
-
-// Other Middlewares
+// Middlewares
 app.use(helmet());
+
+// Robust CORS configuration for local development.
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, or file://)
+        if (!origin) return callback(null, true);
+        
+        // Allow local development ports and both localhost and 127.0.0.1
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173'
+        ];
+        
+        if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+             return callback(null, true);
+        }
+        
+        // In production, strict check would go here. For this setup, we're permissive for dev.
+        return callback(null, true);
+    },
+    credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
@@ -67,19 +65,20 @@ app.use('/uploads', express.static('uploads'));
 app.get('/', (req: Request, res: Response) => {
   res.send('Tal Avenue Backend is running!');
 });
+
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/employees', employeeRoutes);
 app.use('/api/v1/buildings', buildingRoutes);
-app.use('/api/v1/floors', buildingRoutes); // Floors are nested under buildings but this allows direct access if needed
+app.use('/api/v1/floors', floorRoutes);
 app.use('/api/v1/rooms', roomRoutes);
 app.use('/api/v1/assignments', assignmentRoutes);
 app.use('/api/v1/maintenance', maintenanceRoutes);
 app.use('/api/v1/reservations', reservationRoutes);
 app.use('/api/v1/hostings', hostingRoutes);
-app.use('/api/v1/activity-log', activityLogRoutes);
-app.use('/api/v1/system-settings', systemSettingsRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/activity-log', activityLogRoutes);
 
 
 // Handle 404 Not Found
@@ -90,14 +89,23 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Global Error Handler
 app.use(errorMiddleware);
 
-const server = app.listen(config.port, () => {
-  logger.info(`Server is running on port ${config.port}`);
-  // initializeCronJobs();
+// Bind to 0.0.0.0 to ensure the server accepts connections from all interfaces.
+const server = app.listen(Number(config.port), '0.0.0.0', () => {
+  logger.info(`Server is running on http://0.0.0.0:${config.port}`);
+  logger.info(`Local address: http://127.0.0.1:${config.port}/api/v1`);
+  logger.info(`Ensure your frontend API_BASE_URL points to http://127.0.0.1:${config.port}/api/v1`);
+  initializeCronJobs();
+});
+
+server.on('error', (error: any) => {
+    if (error.code === 'EADDRINUSE') {
+        logger.error(`Port ${config.port} is already in use. Please free the port or configure a different one in .env`);
+    } else {
+        logger.error(`Server failed to start: ${error.message}`);
+    }
 });
 
 // Graceful Shutdown
-// FIX: Cast `process` to `any` to access Node.js-specific properties 'on' and 'exit'
-// that are not available in the default TypeScript 'Process' type.
 (process as any).on('SIGTERM', () => {
     logger.info('SIGTERM signal received: closing HTTP server');
     server.close(() => {

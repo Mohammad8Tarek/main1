@@ -1,75 +1,61 @@
-import prisma from '../../database/prisma';
-import { Prisma, Reservation } from '@prisma/client';
-import httpStatus from 'http-status';
-import ApiError from '../../utils/apiError';
+
 import logger from '../../utils/logger';
+import ApiError from '../../utils/apiError';
+import httpStatus from 'http-status';
 
-const createReservation = async (data: Omit<Reservation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Reservation> => {
-    const room = await prisma.room.findUnique({ where: { id: data.roomId } });
-    if (!room) throw new ApiError(httpStatus.NOT_FOUND, 'Room not found');
+interface Reservation {
+    id: string;
+    [key: string]: any;
+}
 
-    const reservation = await prisma.reservation.create({ 
-        data: {
-            ...data,
-            checkInDate: new Date(data.checkInDate),
-            checkOutDate: data.checkOutDate ? new Date(data.checkOutDate) : null,
-        }
-    });
-    
-    // Set room status to reserved
-    await prisma.room.update({
-        where: { id: data.roomId },
-        data: { status: 'reserved' }
-    });
+// In-memory store for reservations
+let reservations: Reservation[] = [];
+let idCounter = 0;
 
-    logger.info(`Created reservation for room ${room.roomNumber}`);
-    return reservation;
+const create = async (data: Omit<Reservation, 'id'>): Promise<Reservation> => {
+    idCounter++;
+    const newReservation: Reservation = { id: idCounter.toString(), ...data };
+    reservations.push(newReservation);
+    logger.info(`Created in-memory reservation: ${newReservation.id}`);
+    return newReservation;
 };
 
-const getAllReservations = async (): Promise<Reservation[]> => {
-    return prisma.reservation.findMany({
-        include: { room: true },
-        orderBy: { checkInDate: 'asc' },
-    });
+const getAll = async (): Promise<Reservation[]> => {
+    logger.info('Fetching in-memory reservations.');
+    return [...reservations];
 };
 
-const getReservationById = async (id: string): Promise<Reservation> => {
-    const reservation = await prisma.reservation.findUnique({ where: { id } });
+const getById = async (id: string): Promise<Reservation> => {
+    const reservation = reservations.find(r => r.id === id);
     if (!reservation) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Reservation not found');
     }
     return reservation;
 };
 
-const updateReservation = async (id: string, updateData: Prisma.ReservationUpdateInput): Promise<Reservation> => {
-    await getReservationById(id);
-    const updatedReservation = await prisma.reservation.update({ where: { id }, data: updateData });
-    logger.info(`Updated reservation ID: ${id}`);
-    return updatedReservation;
+const update = async (id: string, updateData: Partial<Omit<Reservation, 'id'>>): Promise<Reservation> => {
+    const index = reservations.findIndex(r => r.id === id);
+    if (index === -1) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Reservation not found');
+    }
+    reservations[index] = { ...reservations[index], ...updateData };
+    logger.info(`Updated in-memory reservation: ${id}`);
+    return reservations[index];
 };
 
-const deleteReservation = async (id: string): Promise<void> => {
-    const reservation = await getReservationById(id);
-    
-    await prisma.reservation.delete({ where: { id } });
-
-    // Check if other reservations exist for the room
-    const otherReservations = await prisma.reservation.count({ where: { roomId: reservation.roomId } });
-    if (otherReservations === 0) {
-        // If no other reservations, set room back to available (if not occupied)
-        await prisma.room.updateMany({
-            where: { id: reservation.roomId, status: 'reserved' },
-            data: { status: 'available' }
-        });
+const deleteById = async (id: string): Promise<void> => {
+    const index = reservations.findIndex(r => r.id === id);
+    if (index === -1) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Reservation not found');
     }
-
-    logger.info(`Deleted reservation ID: ${id}`);
+    reservations.splice(index, 1);
+    logger.info(`Deleted in-memory reservation: ${id}`);
 };
 
 export const reservationService = {
-    createReservation,
-    getAllReservations,
-    getReservationById,
-    updateReservation,
-    deleteReservation,
+    create,
+    getAll,
+    getById,
+    update,
+    delete: deleteById,
 };

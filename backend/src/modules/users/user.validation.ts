@@ -1,11 +1,13 @@
+
 import { z } from 'zod';
 import { Role, Status } from '@prisma/client';
 
 const createUser = z.object({
   body: z.object({
+    email: z.string().email(),
     username: z.string().min(3),
     password: z.string().min(6),
-    roles: z.array(z.nativeEnum(Role)),
+    role: z.nativeEnum(Role).optional(),
     status: z.nativeEnum(Status).optional(),
   }),
 });
@@ -21,9 +23,10 @@ const updateUser = z.object({
     id: z.string().cuid(),
   }),
   body: z.object({
+    email: z.string().email().optional(),
     username: z.string().min(3).optional(),
     password: z.string().min(6).optional(),
-    roles: z.array(z.nativeEnum(Role)).optional(),
+    role: z.nativeEnum(Role).optional(),
     status: z.nativeEnum(Status).optional(),
   }).min(1), // Ensure at least one field is being updated
 });
@@ -35,13 +38,10 @@ const deleteUser = z.object({
 });
 
 const changePassword = z.object({
-    params: z.object({
-        id: z.string().cuid(),
-    }),
     body: z.object({
         currentPassword: z.string(),
         newPassword: z.string().min(6),
-    }),
+    })
 });
 
 export const userValidation = {

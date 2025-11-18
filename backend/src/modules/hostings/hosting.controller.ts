@@ -1,38 +1,39 @@
+
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import asyncHandler from '../../utils/asyncHandler';
 import { hostingService } from './hosting.service';
 import ApiResponse from '../../utils/apiResponse';
 
-const createHosting = asyncHandler(async (req: Request, res: Response) => {
-    const hosting = await hostingService.createHosting(req.body);
-    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, hosting, 'Hosting created successfully'));
+const create = asyncHandler(async (req: Request, res: Response) => {
+    const result = await hostingService.create(req.body);
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, result, 'Hosting created'));
 });
 
-const getAllHostings = asyncHandler(async (req: Request, res: Response) => {
-    const hostings = await hostingService.getAllHostings();
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, hostings));
+const getAll = asyncHandler(async (req: Request, res: Response) => {
+    const results = await hostingService.getAll();
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, results));
 });
 
-const getHostingById = asyncHandler(async (req: Request, res: Response) => {
-    const hosting = await hostingService.getHostingById(req.params.id);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, hosting));
+const getById = asyncHandler(async (req: Request, res: Response) => {
+    const result = await hostingService.getById(req.params.id);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, result));
 });
 
-const updateHosting = asyncHandler(async (req: Request, res: Response) => {
-    const hosting = await hostingService.updateHosting(req.params.id, req.body);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, hosting, 'Hosting updated successfully'));
+const update = asyncHandler(async (req: Request, res: Response) => {
+    const result = await hostingService.update(req.params.id, req.body);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, result, 'Hosting updated'));
 });
 
-const deleteHosting = asyncHandler(async (req: Request, res: Response) => {
-    await hostingService.deleteHosting(req.params.id);
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Hosting deleted successfully'));
+const deleteById = asyncHandler(async (req: Request, res: Response) => {
+    await hostingService.delete(req.params.id);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Hosting deleted'));
 });
 
 export const hostingController = {
-    createHosting,
-    getAllHostings,
-    getHostingById,
-    updateHosting,
-    deleteHosting,
+    create,
+    getAll,
+    getById,
+    update,
+    delete: deleteById,
 };

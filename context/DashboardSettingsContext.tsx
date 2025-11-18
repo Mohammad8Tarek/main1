@@ -9,8 +9,6 @@ export interface DashboardSettings {
     recentActivity: boolean;
     availableRooms: boolean;
     maintenanceList: boolean;
-    // FIX: Add occupancyRadialChart to the settings interface
-    occupancyRadialChart: boolean;
 }
 
 const defaultSettings: DashboardSettings = {
@@ -21,8 +19,6 @@ const defaultSettings: DashboardSettings = {
     recentActivity: true,
     availableRooms: true,
     maintenanceList: true,
-    // FIX: Add occupancyRadialChart to the default settings
-    occupancyRadialChart: true,
 };
 
 interface DashboardSettingsContextType {

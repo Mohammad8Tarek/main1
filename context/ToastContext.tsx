@@ -27,7 +27,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [toasts, setToasts] = useState<Pick<Notification, 'id' | 'message' | 'type'>[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  // FIX: Changed userId type from number to string to match the User type.
+  // FIX: Changed userId parameter type from number to string to match the User type.
   const getStorageKey = (userId: string) => `notifications_${userId}`;
   const getCounterKey = (userId: string) => `notification_id_counter_${userId}`;
 

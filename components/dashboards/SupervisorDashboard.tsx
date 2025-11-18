@@ -15,7 +15,8 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ data }) => {
     const { settings } = useDashboardSettings();
     const navigate = useNavigate();
 
-    const availableRooms = data.rooms.filter(r => r.status === 'available' && r.currentOccupancy < r.capacity);
+    // FIX: Corrected status comparison from 'available' to 'AVAILABLE'.
+    const availableRooms = data.rooms.filter(r => r.status === 'AVAILABLE' && r.currentOccupancy < r.capacity);
     const cardContainer = "bg-white dark:bg-slate-800 rounded-2xl animate-fade-in-up shadow-md";
 
     return (

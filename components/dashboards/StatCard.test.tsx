@@ -1,5 +1,5 @@
-
 import React from 'react';
+// FIX: Import jest globals to resolve TypeScript errors.
 import { describe, it, expect } from '@jest/globals';
 import { render, screen } from '../../test-utils';
 import StatCard from './StatCard';
@@ -23,7 +23,7 @@ describe('StatCard', () => {
     expect(screen.getByText('120')).toBeInTheDocument();
 
     // Check for icon class
-    const iconElement = screen.getByRole('graphics-symbol', { hidden: true });
+    const iconElement = screen.getByRole('presentation', { hidden: true });
     expect(iconElement).toHaveClass('fa-solid fa-users');
   });
 });

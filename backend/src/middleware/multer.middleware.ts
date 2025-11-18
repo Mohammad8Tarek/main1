@@ -1,11 +1,11 @@
+
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import config from '../config';
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadPath = config.env === 'development' ? 'uploads/' : '/var/data/uploads';
+        const uploadPath = 'uploads/';
         // Ensure directory exists
         fs.mkdirSync(uploadPath, { recursive: true });
         cb(null, uploadPath);
@@ -17,14 +17,14 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: any, cb: any) => {
-    const allowedTypes = /jpeg|jpg|png|gif|svg\+xml/;
+    const allowedTypes = /jpeg|jpg|png|gif/;
     const mimetype = allowedTypes.test(file.mimetype);
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
 
     if (mimetype && extname) {
         return cb(null, true);
     }
-    cb(new Error('File upload only supports the following filetypes - ' + allowedTypes));
+    cb('Error: File upload only supports the following filetypes - ' + allowedTypes);
 };
 
 const upload = multer({

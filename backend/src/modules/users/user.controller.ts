@@ -1,9 +1,9 @@
+
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import asyncHandler from '../../utils/asyncHandler';
 import { userService } from './user.service';
 import ApiResponse from '../../utils/apiResponse';
-import { AuthRequest } from '../../middleware/auth.middleware';
 
 const createUser = asyncHandler(async (req: Request, res: Response) => {
     const user = await userService.createUser(req.body);
@@ -30,21 +30,11 @@ const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'User deleted successfully'));
 });
 
-const changePassword = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
+const changePassword = asyncHandler(async (req: any, res: Response) => {
     const { currentPassword, newPassword } = req.body;
-
-    // Admin can change anyone's password without the current one.
-    // A regular user can change their own password, but needs the current one.
-    // This endpoint is admin-only based on the route, but this logic is for future expansion.
-    if (id !== req.user?.id) { 
-        await userService.updateUser(id, { password: newPassword });
-    } else {
-        await userService.changeOwnPassword(id, currentPassword, newPassword);
-    }
-    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Password updated successfully'));
+    await userService.changePassword(req.user.id, currentPassword, newPassword);
+    res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, null, 'Password changed successfully'));
 });
-
 
 export const userController = {
     createUser,

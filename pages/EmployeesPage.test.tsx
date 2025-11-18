@@ -1,10 +1,10 @@
+
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import EmployeesPage from './EmployeesPage';
-// FIX: Removed `logActivity` from import as it's no longer used or exported.
-import { employeeApi, assignmentApi, roomApi } from '../services/apiService';
+import { assignmentApi, employeeApi, logActivity, roomApi } from '../services/apiService';
 import '@testing-library/jest-dom';
-import type { Employee } from '../types';
+import type { Employee, User, UserRole } from '../types';
 import * as Auth from '../hooks/useAuth';
 
 // Mock the API module and other dependencies
@@ -19,11 +19,12 @@ jest.mock('../services/apiService', () => {
             delete: jest.fn(),
         },
         assignmentApi: {
-            getAll: jest.fn().mockResolvedValue([]),
+            getAll: jest.fn(),
         },
         roomApi: {
-            getAll: jest.fn().mockResolvedValue([]),
+            getAll: jest.fn(),
         },
+        logActivity: jest.fn(),
     };
 });
 
@@ -33,22 +34,32 @@ const mockedEmployeeApi = {
     update: employeeApi.update as jest.Mock<typeof employeeApi.update>,
     delete: employeeApi.delete as jest.Mock<typeof employeeApi.delete>,
 };
+const mockedAssignmentApi = {
+    getAll: assignmentApi.getAll as jest.Mock<typeof assignmentApi.getAll>,
+};
+const mockedRoomApi = {
+    getAll: roomApi.getAll as jest.Mock<typeof roomApi.getAll>,
+};
+const mockedLogActivity = logActivity as jest.Mock<typeof logActivity>;
 
 // Mock useAuth to provide an admin user
 const mockUseAuth = jest.spyOn(Auth, 'useAuth');
 
 const mockEmployees: Employee[] = [
-    { id: '1', employeeId: 'EMP001', firstName: 'John', lastName: 'Doe', nationalId: '123456789', jobTitle: 'Developer', phone: '111', department: 'it', status: 'active', contractEndDate: '2025-01-01T00:00:00.000Z' },
-    { id: '2', employeeId: 'EMP002', firstName: 'Jane', lastName: 'Smith', nationalId: '987654321', jobTitle: 'HR Manager', phone: '222', department: 'hr', status: 'active', contractEndDate: '2025-01-01T00:00:00.000Z' },
-    { id: '3', employeeId: 'EMP003', firstName: 'Peter', lastName: 'Jones', nationalId: '112233445', jobTitle: 'Designer', phone: '333', department: 'marketing', status: 'left', contractEndDate: '2023-01-01T00:00:00.000Z' },
+    { id: '1', employeeId: 'EMP001', firstName: 'John', lastName: 'Doe', nationalId: '123456789', jobTitle: 'Developer', phone: '111', department: 'it', status: 'ACTIVE', contractEndDate: '2025-01-01T00:00:00.000Z' },
+    { id: '2', employeeId: 'EMP002', firstName: 'Jane', lastName: 'Smith', nationalId: '987654321', jobTitle: 'HR Manager', phone: '222', department: 'hr', status: 'ACTIVE', contractEndDate: '2025-01-01T00:00:00.000Z' },
+    { id: '3', employeeId: 'EMP003', firstName: 'Peter', lastName: 'Jones', nationalId: '112233445', jobTitle: 'Designer', phone: '333', department: 'marketing', status: 'LEFT', contractEndDate: '2023-01-01T00:00:00.000Z' },
 ];
 
 describe('EmployeesPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockedEmployeeApi.getAll.mockResolvedValue([...mockEmployees]);
+        mockedAssignmentApi.getAll.mockResolvedValue([]);
+        mockedRoomApi.getAll.mockResolvedValue([]);
+        mockedLogActivity.mockResolvedValue({ id: 1, username: 'test-user', action: 'test action', timestamp: new Date().toISOString() });
         mockUseAuth.mockReturnValue({
-            user: { id: 'test-admin-id', username: 'testadmin', roles: ['admin'], status: 'active' },
+            user: { id: '1', username: 'testadmin', role: 'ADMIN', status: 'ACTIVE', email: 'admin@test.com' },
             loading: false,
             login: jest.fn(),
             logout: jest.fn(),
@@ -89,7 +100,7 @@ describe('EmployeesPage', () => {
         await waitFor(() => expect(screen.getByText('John')).toBeInTheDocument());
 
         const statusFilter = screen.getByLabelText(/status/i);
-        fireEvent.change(statusFilter, { target: { value: 'left' } });
+        fireEvent.change(statusFilter, { target: { value: 'LEFT' } });
 
         expect(screen.queryByText('John')).not.toBeInTheDocument();
         expect(screen.queryByText('Jane')).not.toBeInTheDocument();
@@ -97,26 +108,16 @@ describe('EmployeesPage', () => {
     });
 
     it('opens add modal, creates a new employee, and displays it', async () => {
-        const newEmployee: Employee = { id: '4', employeeId: 'EMP004', firstName: 'Test', lastName: 'User', nationalId: '444555666', jobTitle: 'QA', phone: '444', department: 'it', status: 'active', contractEndDate: '2026-01-01T00:00:00.000Z' };
+        const newEmployee: Employee = { id: '4', employeeId: 'EMP004', firstName: 'Test', lastName: 'User', nationalId: '444555666', jobTitle: 'QA', phone: '444', department: 'it', status: 'ACTIVE', contractEndDate: '2026-01-01T00:00:00.000Z' };
         mockedEmployeeApi.create.mockResolvedValue(newEmployee);
-        
-        const originalGetAll = mockedEmployeeApi.getAll.getMockImplementation();
-        mockedEmployeeApi.getAll.mockImplementation(async () => {
-             // Simulate the refetch after creation
-            if (mockedEmployeeApi.create.mock.calls.length > 0) {
-                 return [...mockEmployees, newEmployee];
-            }
-            return mockEmployees;
-        });
+        mockedEmployeeApi.getAll.mockResolvedValueOnce([...mockEmployees]).mockResolvedValueOnce([...mockEmployees, newEmployee]);
         
         render(<EmployeesPage />);
         
         fireEvent.click(screen.getByRole('button', { name: /add employee/i }));
 
-        // Wait for modal to appear
         await screen.findByRole('heading', { name: /add employee/i });
         
-        // Fill out the form
         fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Test' } });
         fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'User' } });
         fireEvent.change(screen.getByLabelText(/employee id/i), { target: { value: 'EMP004' } });
@@ -127,16 +128,13 @@ describe('EmployeesPage', () => {
         const departmentSelect = screen.getByLabelText(/department/i);
         fireEvent.change(departmentSelect, { target: { value: 'it' } });
         
-        // Wait for job titles to update based on department selection
         await waitFor(() => {
             const jobTitleSelect = screen.getByLabelText(/job title/i);
             expect(jobTitleSelect.children.length).toBeGreaterThan(0);
         });
 
-        // Submit the form
         fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
-        // Check if the API was called
         await waitFor(() => {
             expect(mockedEmployeeApi.create).toHaveBeenCalledWith(expect.objectContaining({
                 firstName: 'Test',
@@ -145,13 +143,9 @@ describe('EmployeesPage', () => {
             }));
         });
 
-        // Check if the new employee is displayed in the table
         await waitFor(() => {
             expect(screen.getByText('Test')).toBeInTheDocument();
             expect(screen.getByText('User')).toBeInTheDocument();
         });
-        
-        // Restore original mock
-        mockedEmployeeApi.getAll.mockImplementation(originalGetAll);
     });
 });

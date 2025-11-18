@@ -1,3 +1,4 @@
+
 class ApiError extends Error {
   statusCode: number;
   isOperational: boolean;
@@ -9,8 +10,7 @@ class ApiError extends Error {
     if (stack) {
       this.stack = stack;
     } else {
-      // FIX: Cast `Error` to `any` to access the V8-specific `captureStackTrace` method,
-      // which is not part of the standard ECMAScript Error type definition.
+      // FIX: Cast Error to any to access captureStackTrace, a V8-specific method not in standard ES types.
       (Error as any).captureStackTrace(this, this.constructor);
     }
   }

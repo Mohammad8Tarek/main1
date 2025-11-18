@@ -1,5 +1,5 @@
-
 import { jsPDF } from 'jspdf';
+// FIX: Changed from side-effect import to default import for ES module compatibility.
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import type { ExportSettings } from '../context/ExportSettingsContext';
@@ -125,6 +125,8 @@ export const exportToPdf = ({ headers, data, title, filename, settings, language
     const processedData = processDataForRtl(data, language);
     const tableHeaderColor = settings.headerColor;
 
+    // FIX: Changed from `doc.autoTable` to the functional call `autoTable(doc, ...)`
+    // to work correctly with ES module imports.
     autoTable(doc, {
         head: [processedHeaders],
         body: processedData,

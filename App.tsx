@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
@@ -16,7 +15,6 @@ import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './context/ToastContext';
 import { systemSettingsApi } from './services/apiService';
 import { ExportSettingsProvider } from './context/ExportSettingsContext';
-import { DashboardSettingsProvider } from './context/DashboardSettingsContext';
 
 // --- System Settings Context ---
 interface SystemSettings {
@@ -29,34 +27,23 @@ export const useSystemSettings = (): SystemSettings => React.useContext(SystemSe
 
 const SystemSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [settings, setSettings] = useState<SystemSettings>(defaultSystemSettings);
-    const { token } = useAuth();
-
-    const fetchSettings = async () => {
-        try {
-            const data = await systemSettingsApi.getSettings();
-            setSettings({
-                ai_suggestions: data.ai_suggestions === 'true',
-            });
-        } catch (error) {
-            console.error("Failed to load system settings", error);
-        }
-    };
+    const { user } = useAuth();
 
     useEffect(() => {
-        if (token) {
-            fetchSettings();
-        }
-
-        // Listen for changes
-        const handleSettingsChange = (event: Event) => {
-            const customEvent = event as CustomEvent;
-            if (customEvent.detail.table === 'SystemVariables') {
-                fetchSettings();
+        if (!user) return; // Don't fetch if not logged in
+        const fetchSettings = async () => {
+            try {
+                const data = await systemSettingsApi.getSettings();
+                setSettings({
+                    ai_suggestions: data.ai_suggestions === 'true',
+                });
+            } catch (error) {
+                console.error("Failed to load system settings", error);
             }
         };
-        window.addEventListener('datachanged', handleSettingsChange);
-        return () => window.removeEventListener('datachanged', handleSettingsChange);
-    }, [token]);
+        
+        fetchSettings();
+    }, [user]);
 
     return (
         <SystemSettingsContext.Provider value={settings}>
@@ -72,11 +59,11 @@ const App: React.FC = () => {
     <AuthProvider>
       <LanguageProvider>
         <ToastProvider>
-          <ExportSettingsProvider>
-            <DashboardSettingsProvider>
+          <SystemSettingsProvider>
+            <ExportSettingsProvider>
               <AppContent />
-            </DashboardSettingsProvider>
-          </ExportSettingsProvider>
+            </ExportSettingsProvider>
+          </SystemSettingsProvider>
         </ToastProvider>
       </LanguageProvider>
     </AuthProvider>
@@ -109,24 +96,24 @@ const AppContent: React.FC = () => {
     );
   }
 
+  const isAdmin = user && ['ADMIN', 'SUPER_ADMIN'].includes(user.role);
+
   return (
     <HashRouter>
-      <SystemSettingsProvider>
-        <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
-          <Route path="/" element={user ? <Layout theme={theme} toggleTheme={toggleTheme} /> : <Navigate to="/login" />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="housing" element={<BuildingsAndRoomsPage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="reservations" element={<AssignmentsPage />} />
-            <Route path="maintenance" element={<MaintenancePage />} />
-            {user?.roles?.some(r => ['super_admin', 'admin'].includes(r)) && <Route path="users" element={<UsersPage />} />}
-            {user?.roles?.some(r => ['super_admin', 'admin'].includes(r)) && <Route path="activity-log" element={<ActivityLogPage />} />}
-            {user?.roles?.some(r => ['super_admin', 'admin'].includes(r)) && <Route path="settings" element={<SettingsPage />} />}
-          </Route>
-          <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
-        </Routes>
-      </SystemSettingsProvider>
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
+        <Route path="/" element={user ? <Layout theme={theme} toggleTheme={toggleTheme} /> : <Navigate to="/login" />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="housing" element={<BuildingsAndRoomsPage />} />
+          <Route path="employees" element={<EmployeesPage />} />
+          <Route path="reservations" element={<AssignmentsPage />} />
+          <Route path="maintenance" element={<MaintenancePage />} />
+          {isAdmin && <Route path="users" element={<UsersPage />} />}
+          {isAdmin && <Route path="activity-log" element={<ActivityLogPage />} />}
+          {isAdmin && <Route path="settings" element={<SettingsPage />} />}
+        </Route>
+        <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
+      </Routes>
     </HashRouter>
   );
 };

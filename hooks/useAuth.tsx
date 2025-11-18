@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
-import { activityLogApi } from '../services/apiService';
+import { authApi, logActivity } from '../services/apiService';
 
 interface AuthContextType {
   user: User | null;
-  login: (user: User, token: string, rememberMe: boolean) => void;
+  login: (user: User, accessToken: string, refreshToken: string, rememberMe: boolean) => void;
   logout: () => void;
   loading: boolean;
   token: string | null;
@@ -33,49 +34,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (storedUser && storedToken) {
       try {
-        const parsedUser = JSON.parse(storedUser);
-        // Basic validation of stored user object
-        if (parsedUser && parsedUser.id && parsedUser.username) {
-          setUser(parsedUser);
-          setToken(storedToken);
-        } else {
-            throw new Error("Invalid user object in storage");
-        }
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
       } catch (error) {
         console.error("Failed to parse user from storage", error);
-        sessionStorage.removeItem('user');
-        sessionStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        sessionStorage.clear();
+        localStorage.clear();
       }
     }
     setLoading(false);
   }, []);
+  
+  // FIX: Import `useCallback` from react to fix "Cannot find name 'useCallback'" error.
+  const handleLogout = useCallback(() => {
+    if (user) {
+      logActivity(user.username, 'Logged out');
+    }
+    // Clear from both storages on logout
+    sessionStorage.clear();
+    localStorage.clear();
+    setUser(null);
+    setToken(null);
+  }, [user]);
 
-  const login = (userData: User, jwtToken: string, rememberMe: boolean) => {
+  // Listen for auth errors from apiService to auto-logout
+  useEffect(() => {
+    const handleAuthError = () => {
+        handleLogout();
+    };
+    window.addEventListener('auth-error', handleAuthError);
+    return () => window.removeEventListener('auth-error', handleAuthError);
+  }, [handleLogout]);
+
+  const login = (userData: User, accessToken: string, refreshToken: string, rememberMe: boolean) => {
     const storage = rememberMe ? localStorage : sessionStorage;
     storage.setItem('user', JSON.stringify(userData));
-    storage.setItem('token', jwtToken);
+    storage.setItem('token', accessToken);
+    storage.setItem('refreshToken', refreshToken);
     
     // Clear the other storage to avoid conflicts
     const otherStorage = rememberMe ? sessionStorage : localStorage;
     otherStorage.removeItem('user');
     otherStorage.removeItem('token');
+    otherStorage.removeItem('refreshToken');
 
     setUser(userData);
-    setToken(jwtToken);
+    setToken(accessToken);
+    logActivity(userData.username, 'Logged in');
   };
 
   const logout = () => {
-    // Backend handles logout logging.
-    // Clear from both storages on logout
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('rememberedUser'); // Also clear remembered username
-    setUser(null);
-    setToken(null);
+    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+    if(refreshToken) {
+        authApi.logout(refreshToken).catch(err => console.error("Logout failed on backend:", err));
+    }
+    handleLogout();
   };
 
   return (

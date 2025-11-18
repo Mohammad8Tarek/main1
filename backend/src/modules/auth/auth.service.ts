@@ -1,27 +1,61 @@
-
 import prisma from '../../database/prisma';
-import { Prisma, User, Role } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import httpStatus from 'http-status';
 import ApiError from '../../utils/apiError';
 import { generateTokens, verifyToken } from '../../utils/jwt';
 import config from '../../config';
 import logger from '../../utils/logger';
-import { activityLogService } from '../activity-log/activity-log.service';
 
-const login = async (username: string, pass: string) => {
-    const user = await prisma.user.findUnique({ where: { username } });
-    if (!user || !(await bcrypt.compare(pass, user.password))) {
-        await activityLogService.createLog({ username, action: 'Failed login attempt: Invalid credentials' });
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect username or password');
+const register = async (userData: Prisma.UserCreateInput): Promise<Partial<User>> => {
+    const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email: userData.email }, { username: userData.username }] },
+    });
+    if (existingUser) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Email or username already taken');
+    }
+
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    const user = await prisma.user.create({
+        data: {
+            ...userData,
+            password: hashedPassword,
+        },
+    });
+
+    const { password, ...userWithoutPassword } = user;
+    logger.info(`User registered: ${user.username}`);
+    return userWithoutPassword;
+};
+
+const login = async (identifier: string, pass: string) => {
+    logger.info(`Login attempt for identifier: ${identifier}`);
+    const user = await prisma.user.findFirst({
+        where: {
+            OR: [
+                { email: identifier },
+                { username: identifier }
+            ]
+        }
+    });
+
+    if (!user) {
+        logger.warn(`Login failed: No user found for identifier: ${identifier}`);
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect credentials');
+    }
+
+    const isPasswordMatch = await bcrypt.compare(pass, user.password);
+    if (!isPasswordMatch) {
+        logger.warn(`Login failed: Incorrect password for user: ${user.username}`);
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect credentials');
     }
 
     if (user.status !== 'ACTIVE') {
-        await activityLogService.createLog({ username, action: 'Failed login attempt: Account inactive' });
+        logger.warn(`Inactive user login attempt: ${identifier}`);
         throw new ApiError(httpStatus.FORBIDDEN, 'Your account is inactive');
     }
 
-    const tokens = generateTokens({ id: user.id, roles: user.roles });
+    const tokens = generateTokens({ id: user.id, role: user.role });
     
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     await prisma.refreshToken.create({
@@ -32,7 +66,7 @@ const login = async (username: string, pass: string) => {
         }
     });
     
-    await activityLogService.createLog({ username, action: 'User logged in successfully' });
+    logger.info(`User logged in: ${user.username}`);
     const { password, ...userWithoutPassword } = user;
     return { user: userWithoutPassword, tokens };
 };
@@ -40,9 +74,6 @@ const login = async (username: string, pass: string) => {
 const refreshToken = async (token: string) => {
     const refreshTokenDoc = await prisma.refreshToken.findUnique({ where: { token } });
     if (!refreshTokenDoc || refreshTokenDoc.expiresAt < new Date()) {
-        if (refreshTokenDoc) {
-             await prisma.refreshToken.delete({ where: { token } });
-        }
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid or expired refresh token');
     }
     
@@ -54,7 +85,7 @@ const refreshToken = async (token: string) => {
     }
 
     await prisma.refreshToken.delete({ where: { token } });
-    const newTokens = generateTokens({ id: user.id, roles: user.roles });
+    const newTokens = generateTokens({ id: user.id, role: user.role });
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await prisma.refreshToken.create({
@@ -69,21 +100,16 @@ const refreshToken = async (token: string) => {
 };
 
 const logout = async (token: string) => {
-    const refreshTokenDoc = await prisma.refreshToken.findUnique({ 
-        where: { token },
-        include: { user: { select: { username: true } } } 
-    });
+    const refreshTokenDoc = await prisma.refreshToken.findUnique({ where: { token } });
     if (!refreshTokenDoc) {
-        logger.warn(`Logout attempt with invalid refresh token.`);
-        return;
+        throw new ApiError(httpStatus.NOT_FOUND, 'Refresh token not found');
     }
     await prisma.refreshToken.delete({ where: { token } });
-    if (refreshTokenDoc.user) {
-        await activityLogService.createLog({ username: refreshTokenDoc.user.username, action: 'User logged out' });
-    }
+    logger.info(`User logged out, refresh token revoked for user ID: ${refreshTokenDoc.userId}`);
 };
 
 export const authService = {
+    register,
     login,
     refreshToken,
     logout,

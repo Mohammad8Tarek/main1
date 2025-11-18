@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/apiService';
 import { useLanguage } from '../context/LanguageContext';
+import { User } from '../types';
 
 const LoginPage: React.FC = () => {
-    const [username, setUsername] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
@@ -17,7 +17,7 @@ const LoginPage: React.FC = () => {
     useEffect(() => {
         const rememberedUsername = localStorage.getItem('rememberedUser');
         if (rememberedUsername) {
-            setUsername(rememberedUsername);
+            setIdentifier(rememberedUsername);
             setRememberMe(true);
         }
     }, []);
@@ -27,21 +27,23 @@ const LoginPage: React.FC = () => {
         setError('');
         setLoading(true);
 
-        if (!username || !password) {
+        if (!identifier || !password) {
             setError(t('login.fillFields'));
             setLoading(false);
             return;
         }
 
         try {
-            const { user, token } = await authApi.login({ username, password });
-            login(user, token, rememberMe);
+            const { user, tokens } = await authApi.login({ identifier, password });
+            login(user, tokens.accessToken, tokens.refreshToken, rememberMe);
             if (rememberMe) {
-                localStorage.setItem('rememberedUser', username);
+                localStorage.setItem('rememberedUser', identifier);
             } else {
                 localStorage.removeItem('rememberedUser');
             }
+            // No need to setLoading(false) on success as we redirect, but good practice
         } catch (err: any) {
+            console.error("Login error:", err);
             setError(err.message || t('login.invalidCredentials'));
         } finally {
             setLoading(false);
@@ -50,105 +52,110 @@ const LoginPage: React.FC = () => {
 
     return (
         <>
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-300 p-4 font-sans">
+        <div 
+            className="relative min-h-screen flex flex-col items-center justify-center p-4 bg-cover bg-center"
+            style={{
+                backgroundImage: "url('https://d1wo7kaelp5eck.cloudfront.net/sunrise-resorts.com-1611976553/cms/cache/v2/65c24abee658d.jpg/1920x1080/fit/80/fbfe860fe26ef601e58afd7a34816316.jpg')"
+            }}
+        >
+            <div className="absolute inset-0 bg-black bg-opacity-30"></div>
             
-            {/* Logo and Title */}
-            <div className="text-center mb-8 animate-fade-in-up">
-                <div className="inline-block">
-                     <svg width="80" height="25" viewBox="0 0 80 25" xmlns="http://www.w3.org/2000/svg" className="text-amber-400 fill-current drop-shadow-lg">
-                        <path d="M0 0 L80 0 L70 20 L10 20 Z" />
-                    </svg>
-                </div>
-                <h1 className="text-5xl font-bold text-white tracking-wider mt-4">
+            {/* Logo */}
+            <div className="relative z-10 text-center mb-10 flex flex-col items-center animate-fade-in-up">
+                <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
+                    <path d="M50 10 L85 40 H15 Z" className="fill-primary-500" />
+                    <path d="M40 90 L25 40 H75 L60 90 Z" className="fill-amber-400" />
+                </svg>
+                <h1 className="text-5xl font-bold font-sans text-white tracking-wider mt-4" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
                     Tal Avenue
                 </h1>
-                <p className="text-lg text-slate-400 tracking-widest mt-1 uppercase">
+                <p className="text-lg font-sans text-primary-200 tracking-widest mt-2 uppercase" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}>
                     Staff Housing
                 </p>
             </div>
 
 
             {/* Login Form Container */}
-            <div className="w-full max-w-sm bg-slate-800 rounded-lg shadow-2xl p-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <h2 className="text-2xl font-bold text-white text-center mb-6 tracking-[0.2em]">{t('login.title')}</h2>
-                
-                <form className="space-y-6" onSubmit={handleSubmit}>
-                    <div>
-                        <label htmlFor="username" className="block mb-2 text-sm font-medium text-slate-400">
-                            {t('login.username')}
-                        </label>
-                        <input
-                            type="text"
-                            name="username"
-                            id="username"
-                            className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 placeholder-slate-500"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Default: admin"
-                            required
-                            aria-label={t('login.username')}
-                        />
-                    </div>
-                    <div>
-                        <label
-                            htmlFor="password"
-                            className="block mb-2 text-sm font-medium text-slate-400"
-                        >
-                            {t('login.password')}
-                        </label>
-                        <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 placeholder-slate-500"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Default: admin123"
-                            required
-                            aria-label={t('login.password')}
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                            <div className="flex items-center h-5">
-                                <input 
-                                    id="remember" 
-                                    aria-describedby="remember" 
-                                    type="checkbox" 
-                                    className="w-4 h-4 border-slate-600 rounded bg-slate-700 focus:ring-3 focus:ring-primary-600 ring-offset-slate-800" 
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                />
-                            </div>
-                            <div className="mx-2 text-sm">
-                                <label htmlFor="remember" className="text-slate-400">{t('login.rememberMe')}</label>
-                            </div>
-                        </div>
-                        <button type="button" onClick={() => setIsForgotPasswordModalOpen(true)} className="text-sm font-medium text-primary-500 hover:underline">{t('login.forgotPassword')}</button>
-                    </div>
+            <div className="relative z-10 w-full max-w-sm bg-black/20 backdrop-blur-lg border border-white/20 rounded-lg shadow-2xl overflow-hidden animate-fade-in-up">
+                <div className="p-8">
+                    <h2 className="text-2xl font-bold text-white text-center mb-8">{t('login.title')}</h2>
                     
-                    {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+                    <form className="space-y-6" onSubmit={handleSubmit}>
+                        <div>
+                            <label htmlFor="identifier" className="block mb-2 text-sm font-medium text-gray-300">
+                                Email or Username
+                            </label>
+                            <input
+                                type="text"
+                                name="identifier"
+                                id="identifier"
+                                className="bg-black/10 border border-white/20 text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 placeholder-gray-400"
+                                value={identifier}
+                                onChange={(e) => setIdentifier(e.target.value)}
+                                required
+                                aria-label="Email or Username"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                htmlFor="password"
+                                className="block mb-2 text-sm font-medium text-gray-300"
+                            >
+                                {t('login.password')}
+                            </label>
+                            <input
+                                type="password"
+                                name="password"
+                                id="password"
+                                className="bg-black/10 border border-white/20 text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 placeholder-gray-400"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                aria-label={t('login.password')}
+                            />
+                        </div>
 
-                    <button
-                        type="submit"
-                        className="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:outline-none focus:ring-primary-800 font-medium rounded-lg text-sm px-5 py-3 text-center disabled:opacity-60 transition-colors duration-300"
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <i className="fa-solid fa-spinner fa-spin mr-2"></i>
-                                {t('loading')}...
-                            </>
-                        ) : (
-                            t('login.loginButton')
-                        )}
-                    </button>
-                </form>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                                <div className="flex items-center h-5">
+                                    <input 
+                                        id="remember" 
+                                        aria-describedby="remember" 
+                                        type="checkbox" 
+                                        className="w-4 h-4 border-white/20 rounded bg-black/10 focus:ring-3 focus:ring-primary-600 ring-offset-transparent" 
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                    />
+                                </div>
+                                <div className="mx-2 text-sm">
+                                    <label htmlFor="remember" className="text-gray-300">{t('login.rememberMe')}</label>
+                                </div>
+                            </div>
+                            <button type="button" onClick={() => setIsForgotPasswordModalOpen(true)} className="text-sm font-medium text-primary-400 hover:underline">{t('login.forgotPassword')}</button>
+                        </div>
+                        
+                        {error && <p className="text-sm text-red-400 text-center bg-red-900/20 p-2 rounded">{error}</p>}
+
+                        <button
+                            type="submit"
+                            className="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:outline-none focus:ring-primary-800 font-medium rounded-lg text-sm px-5 py-3 text-center disabled:opacity-60 transition-colors duration-300"
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <>
+                                    <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                    {t('loading')}...
+                                </>
+                            ) : (
+                                t('login.loginButton')
+                            )}
+                        </button>
+                    </form>
+                </div>
             </div>
             
             <footer className="absolute bottom-4 text-center w-full z-10">
-                <p className="text-sm text-slate-500">Implemented by: Mohamed Tarek</p>
+                <p className="text-sm text-white/70">Implemented by: Mohamed Tarek</p>
             </footer>
         </div>
         {isForgotPasswordModalOpen && (

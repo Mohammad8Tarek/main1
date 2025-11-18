@@ -1,3 +1,4 @@
+
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger';
 
@@ -12,9 +13,9 @@ const prisma = new PrismaClient({
 
 prisma.$on('query', (e) => {
     if (process.env.NODE_ENV === 'development') {
-        // logger.info(`Query: ${e.query}`);
-        // logger.info(`Params: ${e.params}`);
-        // logger.info(`Duration: ${e.duration}ms`);
+        logger.info(`Query: ${e.query}`);
+        logger.info(`Params: ${e.params}`);
+        logger.info(`Duration: ${e.duration}ms`);
     }
 });
 

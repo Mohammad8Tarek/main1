@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ActivityLog } from '../types';
-import { activityLogApi } from '../services/apiService';
+import { activityLogApi, logActivity } from '../services/apiService';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../hooks/useAuth';
@@ -110,6 +109,7 @@ const ActivityLogPage: React.FC = () => {
             ]);
             const filename = `report_activity-log_${new Date().toISOString().split('T')[0]}.pdf`;
             exportToPdf({ headers, data, title: t('activityLog.reportTitle'), filename, settings: exportSettings, language });
+            logActivity(user!.username, `Exported Activity Log to PDF`);
         } catch (error) {
             console.error("PDF Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -131,6 +131,7 @@ const ActivityLogPage: React.FC = () => {
             ]);
             const filename = `report_activity-log_${new Date().toISOString().split('T')[0]}.xlsx`;
             exportToExcel({ headers, data, filename, settings: exportSettings });
+            logActivity(user!.username, `Exported Activity Log to Excel`);
         } catch (error) {
             console.error("Excel Export failed:", error);
             showToast(t('errors.generic'), 'error');

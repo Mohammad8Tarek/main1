@@ -62,6 +62,10 @@ const createFloor = async (floorData: Prisma.FloorUncheckedCreateInput): Promise
     return floor;
 };
 
+const getAllFloors = async (): Promise<Floor[]> => {
+    return prisma.floor.findMany();
+};
+
 const getFloorsByBuilding = async (buildingId: string): Promise<Floor[]> => {
     return prisma.floor.findMany({ where: { buildingId } });
 };
@@ -93,6 +97,7 @@ const deleteFloor = async (id: string): Promise<void> => {
 
 export const floorService = {
     createFloor,
+    getAllFloors,
     getFloorsByBuilding,
     getFloorById,
     updateFloor,

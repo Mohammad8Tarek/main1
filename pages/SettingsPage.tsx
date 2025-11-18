@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-// FIX: Replaced `logActivity` with `activityLogApi` to use the correct API for logging.
-import { systemSettingsApi, activityLogApi } from '../services/apiService';
+import { systemSettingsApi, logActivity } from '../services/apiService';
 import { useAuth } from '../hooks/useAuth';
 
 interface Settings {
@@ -55,11 +54,8 @@ const SettingsPage: React.FC = () => {
         setIsSubmitting(true);
         try {
             await systemSettingsApi.updateSettings(settings);
-            // FIX: Replaced `logActivity` with `activityLogApi.create` to use the correct API endpoint for logging.
-            await activityLogApi.create({ username: user!.username, action: 'Updated system settings' });
+            logActivity(user!.username, 'Updated system settings');
             showToast(t('settingsPage.saveSuccess'), 'success');
-            // FIX: Manually dispatch event to trigger data reload in other components.
-            window.dispatchEvent(new CustomEvent('datachanged', { detail: { table: 'SystemVariables' } }));
         } catch (error) {
             showToast(t('errors.generic'), 'error');
         } finally {

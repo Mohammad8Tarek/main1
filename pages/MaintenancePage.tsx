@@ -1,7 +1,9 @@
 
+
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MaintenanceRequest, Room, MAINTENANCE_PROBLEM_TYPES } from '../types';
-import { maintenanceApi, roomApi } from '../services/apiService';
+import { maintenanceApi, roomApi, logActivity } from '../services/apiService';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -28,7 +30,8 @@ const MaintenancePage: React.FC = () => {
     const { user } = useAuth();
     const { language, t } = useLanguage();
     const { showToast } = useToast();
-    const canManage = user?.roles?.some(r => ['super_admin', 'admin', 'supervisor', 'maintenance'].includes(r));
+    // FIX: Correct property access from `user.roles` to `user.role` and check against uppercase role names.
+    const canManage = user?.role && ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'MAINTENANCE'].includes(user.role);
     const { settings: exportSettings } = useExportSettings();
     const { ai_suggestions } = useSystemSettings();
 
@@ -36,10 +39,12 @@ const MaintenancePage: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRequest, setEditingRequest] = useState<MaintenanceRequest | null>(null);
     const [formData, setFormData] = useState({
-        roomId: '', problemType: '', description: '', status: 'open' as MaintenanceRequest['status'], dueDate: ''
+        // FIX: Change status to uppercase 'OPEN' to match enum type.
+        roomId: '', problemType: '', description: '', status: 'OPEN' as MaintenanceRequest['status'], dueDate: ''
     });
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'reportedAt', direction: 'descending' });
+    // FIX: Change state type to `string | null` to match the `id` type of MaintenanceRequest.
     const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const isDescriptionUserModified = useRef(false);
@@ -111,7 +116,7 @@ const MaintenancePage: React.FC = () => {
     
     const openAddModal = () => {
         setEditingRequest(null);
-        setFormData({ roomId: '', problemType: MAINTENANCE_PROBLEM_TYPES[0], description: '', status: 'open', dueDate: '' });
+        setFormData({ roomId: '', problemType: MAINTENANCE_PROBLEM_TYPES[0], description: '', status: 'OPEN', dueDate: '' });
         isDescriptionUserModified.current = false;
         setIsModalOpen(true);
     };
@@ -192,13 +197,16 @@ const MaintenancePage: React.FC = () => {
         e.preventDefault();
         setIsSubmitting(true);
         const dueDateISO = formData.dueDate ? new Date(formData.dueDate).toISOString() : null;
+        // FIX: Remove incorrect `parseInt` as roomId is a string.
         const submissionData = { ...formData, roomId: formData.roomId, dueDate: dueDateISO };
         try {
             if (editingRequest) {
                 await maintenanceApi.update(editingRequest.id, submissionData);
+                logActivity(user!.username, `Updated maintenance request for room ${roomMap.get(submissionData.roomId)}`);
                 showToast(t('maintenance.updated'), 'success');
             } else {
                 await maintenanceApi.create({ ...submissionData, reportedAt: new Date().toISOString() });
+                logActivity(user!.username, `Created maintenance request for room ${roomMap.get(submissionData.roomId)}`);
                 showToast(t('maintenance.added'), 'success');
             }
             setIsModalOpen(false);
@@ -213,6 +221,7 @@ const MaintenancePage: React.FC = () => {
         setUpdatingRequestId(request.id);
         try {
             await maintenanceApi.update(request.id, { status: newStatus });
+            logActivity(user!.username, `Changed status of request for room ${roomMap.get(request.roomId)} to ${newStatus}`);
             showToast(t('maintenance.statusUpdated'), 'success');
             await fetchData(); // Refresh page data
         } catch (error) {
@@ -226,6 +235,7 @@ const MaintenancePage: React.FC = () => {
         if (!window.confirm(t('maintenance.deleteConfirm'))) return;
         try {
             await maintenanceApi.delete(request.id);
+            logActivity(user!.username, `Deleted maintenance request for room ${roomMap.get(request.roomId)}`);
             showToast(t('maintenance.deleted'), 'success');
             await fetchData();
         } catch (error) {
@@ -235,10 +245,11 @@ const MaintenancePage: React.FC = () => {
     };
     
     const getStatusBadge = (status: MaintenanceRequest['status']) => {
+        // FIX: Use uppercase status values for comparison.
         switch (status) {
-            case 'open': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-            case 'in_progress': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-            case 'resolved': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+            case 'OPEN': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+            case 'IN_PROGRESS': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+            case 'RESOLVED': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
             default: return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
         }
     };
@@ -276,6 +287,7 @@ const MaintenancePage: React.FC = () => {
             ]);
             const filename = `report_maintenance_${new Date().toISOString().split('T')[0]}.pdf`;
             exportToPdf({ headers, data, title: t('maintenance.reportTitle'), filename, settings: exportSettings, language });
+            logActivity(user!.username, `Exported maintenance requests to PDF`);
         } catch(error) {
             console.error("PDF Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -300,6 +312,7 @@ const MaintenancePage: React.FC = () => {
             ]);
             const filename = `report_maintenance_${new Date().toISOString().split('T')[0]}.xlsx`;
             exportToExcel({ headers, data, filename, settings: exportSettings });
+            logActivity(user!.username, `Exported maintenance requests to Excel`);
         } catch(error) {
             console.error("Excel Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -319,8 +332,8 @@ const MaintenancePage: React.FC = () => {
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md">
                      <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-b dark:border-slate-700 gap-4">
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                            {(['all', 'open', 'in_progress', 'resolved'] as StatusFilter[]).map(status => (
-                                <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-1 text-sm rounded-full ${statusFilter === status ? 'bg-primary-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{t(`statuses.${status.replace('_', '')}`)}</button>
+                            {(['all', 'OPEN', 'IN_PROGRESS', 'RESOLVED'] as StatusFilter[]).map(status => (
+                                <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-1 text-sm rounded-full ${statusFilter === status ? 'bg-primary-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{t(`statuses.${status.toLowerCase().replace('_', '')}`)}</button>
                             ))}
                         </div>
                         <div className="flex items-center gap-2">
@@ -356,7 +369,8 @@ const MaintenancePage: React.FC = () => {
                                 </thead>
                                 <tbody>
                                     {paginatedRequests.map(req => {
-                                        const isOverdue = req.dueDate && new Date(req.dueDate) < new Date() && req.status !== 'resolved';
+                                        // FIX: Use uppercase 'RESOLVED' for status comparison.
+                                        const isOverdue = req.dueDate && new Date(req.dueDate) < new Date() && req.status !== 'RESOLVED';
                                         return (
                                             <tr key={req.id} className="bg-white border-b dark:bg-slate-800 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600">
                                                 <th scope="row" className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap dark:text-white">{roomMap.get(req.roomId) || t('unknown')}</th>
@@ -368,13 +382,14 @@ const MaintenancePage: React.FC = () => {
                                                 <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(req.status)}`}>{t(`statuses.${req.status.replace('_', '')}`)}</span></td>
                                                 {canManage && (
                                                     <td className="px-6 py-4 space-x-2 rtl:space-x-reverse whitespace-nowrap">
-                                                        {req.status === 'open' && (
-                                                            <button onClick={() => handleStatusChange(req, 'in_progress')} disabled={updatingRequestId === req.id} className="font-medium text-yellow-600 dark:text-yellow-500 hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        {/* FIX: Use uppercase status values for comparison and state changes. */}
+                                                        {req.status === 'OPEN' && (
+                                                            <button onClick={() => handleStatusChange(req, 'IN_PROGRESS')} disabled={updatingRequestId === req.id} className="font-medium text-yellow-600 dark:text-yellow-500 hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
                                                                 {updatingRequestId === req.id ? <i className="fa-solid fa-spinner fa-spin"></i> : t('maintenance.start')}
                                                             </button>
                                                         )}
-                                                        {req.status === 'in_progress' && (
-                                                            <button onClick={() => handleStatusChange(req, 'resolved')} disabled={updatingRequestId === req.id} className="font-medium text-green-600 dark:text-green-500 hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        {req.status === 'IN_PROGRESS' && (
+                                                            <button onClick={() => handleStatusChange(req, 'RESOLVED')} disabled={updatingRequestId === req.id} className="font-medium text-green-600 dark:text-green-500 hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
                                                                 {updatingRequestId === req.id ? <i className="fa-solid fa-spinner fa-spin"></i> : t('maintenance.resolve')}
                                                             </button>
                                                         )}
@@ -440,7 +455,7 @@ const MaintenancePage: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                            {editingRequest && <div className="mb-6"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('maintenance.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="open">{t('statuses.open')}</option><option value="in_progress">{t('statuses.inprogress')}</option><option value="resolved">{t('statuses.resolved')}</option></select></div>}
+                            {editingRequest && <div className="mb-6"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('maintenance.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="OPEN">{t('statuses.open')}</option><option value="IN_PROGRESS">{t('statuses.inprogress')}</option><option value="RESOLVED">{t('statuses.resolved')}</option></select></div>}
                             <div className="flex justify-end gap-4 mt-6"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500 rounded">{t('cancel')}</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-primary-600 text-white rounded disabled:bg-primary-400">{isSubmitting ? `${t('saving')}...` : t('save')}</button></div>
                         </form>
                     </div>

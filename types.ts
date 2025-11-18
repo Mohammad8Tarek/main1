@@ -1,12 +1,13 @@
-
-
 // FIX: Define and export all application types in this file to serve as a single source of truth for data structures.
+
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'SUPERVISOR' | 'HR' | 'MAINTENANCE' | 'VIEWER';
 
 export interface User {
   id: string;
   username: string;
-  roles: ('super_admin' | 'admin' | 'hr' | 'viewer' | 'supervisor' | 'manager' | 'maintenance')[];
-  status: 'active' | 'inactive';
+  email: string;
+  role: UserRole;
+  status: 'ACTIVE' | 'INACTIVE';
 }
 
 export interface Building {
@@ -14,7 +15,7 @@ export interface Building {
   name: string;
   location: string;
   capacity: number;
-  status: 'active' | 'inactive';
+  status: 'ACTIVE' | 'INACTIVE';
 }
 
 export interface Floor {
@@ -30,7 +31,7 @@ export interface Room {
     roomNumber: string;
     capacity: number;
     currentOccupancy: number;
-    status: 'available' | 'occupied' | 'maintenance' | 'reserved';
+    status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
 }
 
 export interface Employee {
@@ -42,7 +43,7 @@ export interface Employee {
     jobTitle: string;
     phone: string;
     department: string;
-    status: 'active' | 'left';
+    status: 'ACTIVE' | 'LEFT';
     contractEndDate: string;
 }
 
@@ -60,13 +61,13 @@ export interface MaintenanceRequest {
     roomId: string;
     problemType: string;
     description: string;
-    status: 'open' | 'in_progress' | 'resolved';
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
     reportedAt: string;
     dueDate: string | null;
 }
 
 export interface ActivityLog {
-    id: string;
+    id: number; // In-memory backend uses number
     username: string;
     action: string;
     timestamp: string;
@@ -102,7 +103,7 @@ export interface Hosting {
     startDate: string;
     endDate: string;
     notes: string | null;
-    status: 'active' | 'completed' | 'cancelled';
+    status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
     guests: string; // JSON string of ReservationGuest[]
 }
 

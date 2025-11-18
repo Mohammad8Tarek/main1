@@ -1,20 +1,19 @@
+
 import { Router } from 'express';
-import validate from '../../middleware/validate.middleware';
 import { hostingController } from './hosting.controller';
-import { hostingValidation } from './hosting.validation';
 import { authMiddleware } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-router.use(authMiddleware(['super_admin', 'admin', 'manager', 'supervisor', 'hr']));
+router.use(authMiddleware(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR']));
 
 router.route('/')
-    .post(validate(hostingValidation.createHosting), hostingController.createHosting)
-    .get(hostingController.getAllHostings);
+    .get(hostingController.getAll)
+    .post(hostingController.create);
 
 router.route('/:id')
-    .get(validate(hostingValidation.getHosting), hostingController.getHostingById)
-    .patch(validate(hostingValidation.updateHosting), hostingController.updateHosting)
-    .delete(validate(hostingValidation.deleteHosting), hostingController.deleteHosting);
+    .get(hostingController.getById)
+    .patch(hostingController.update)
+    .delete(hostingController.delete);
 
 export default router;

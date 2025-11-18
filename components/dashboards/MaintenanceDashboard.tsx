@@ -15,15 +15,17 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ data }) => 
     const { settings } = useDashboardSettings();
     const navigate = useNavigate();
     
-    const openRequests = data.maintenanceRequests.filter(r => r.status === 'open');
-    const inProgressRequests = data.maintenanceRequests.filter(r => r.status === 'in_progress');
+    // FIX: Corrected status comparisons to use uppercase values.
+    const openRequests = data.maintenanceRequests.filter(r => r.status === 'OPEN');
+    const inProgressRequests = data.maintenanceRequests.filter(r => r.status === 'IN_PROGRESS');
     const roomMap = new Map(data.rooms.map(r => [r.id, r.roomNumber]));
     const cardContainer = "bg-white dark:bg-slate-800 rounded-2xl animate-fade-in-up shadow-md";
 
     const getStatusBadge = (status: MaintenanceRequest['status']) => {
+        // FIX: Corrected status cases to uppercase.
         switch (status) {
-            case 'open': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-            case 'in_progress': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+            case 'OPEN': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+            case 'IN_PROGRESS': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
             default: return '';
         }
     };
@@ -34,7 +36,8 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ data }) => 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard icon="fa-folder-open" title={t('dashboard.maintenance.newTickets')} value={openRequests.length} gradient="bg-gradient-to-br from-red-400 to-red-600" onClick={() => navigate('/maintenance')} />
                     <StatCard icon="fa-list-check" title={t('dashboard.maintenance.inProgress')} value={inProgressRequests.length} gradient="bg-gradient-to-br from-yellow-400 to-orange-600" onClick={() => navigate('/maintenance')} />
-                    <StatCard icon="fa-check-circle" title={t('dashboard.maintenance.resolved')} value={data.maintenanceRequests.filter(r=>r.status === 'resolved').length} gradient="bg-gradient-to-br from-green-400 to-green-600" onClick={() => navigate('/maintenance')} />
+                    {/* FIX: Corrected status comparison to use uppercase 'RESOLVED'. */}
+                    <StatCard icon="fa-check-circle" title={t('dashboard.maintenance.resolved')} value={data.maintenanceRequests.filter(r=>r.status === 'RESOLVED').length} gradient="bg-gradient-to-br from-green-400 to-green-600" onClick={() => navigate('/maintenance')} />
                     <StatCard icon="fa-calendar-xmark" title={t('dashboard.manager.overdueTasks')} value={data.stats.overdueMaintenance.length} gradient="bg-gradient-to-br from-orange-400 to-red-600" onClick={() => navigate('/maintenance')} />
                 </div>
             )}
@@ -51,7 +54,7 @@ const MaintenanceDashboard: React.FC<MaintenanceDashboardProps> = ({ data }) => 
                                             <p className="font-bold text-slate-800 dark:text-white">{req.problemType} - Room {roomMap.get(req.roomId)}</p>
                                             <p className="text-sm text-slate-500 dark:text-slate-400">{req.description}</p>
                                         </div>
-                                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusBadge(req.status)}`}>{t(`statuses.${req.status.replace('_', '')}`)}</span>
+                                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusBadge(req.status)}`}>{t(`statuses.${req.status.toLowerCase().replace('_', '')}`)}</span>
                                     </li>
                                 ))}
                             </ul>

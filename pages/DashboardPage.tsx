@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import useDashboardData from '../hooks/useDashboardData';
-import { DashboardSettingsProvider, useDashboardSettings } from '../context/DashboardSettingsContext';
+import { DashboardSettingsProvider } from '../context/DashboardSettingsContext';
 import CustomizeDashboardModal from '../components/dashboards/CustomizeDashboardModal';
 
 // Import role-specific dashboards
@@ -12,7 +12,7 @@ import SupervisorDashboard from '../components/dashboards/SupervisorDashboard';
 import HRDashboard from '../components/dashboards/HRDashboard';
 import MaintenanceDashboard from '../components/dashboards/MaintenanceDashboard';
 import GenericDashboard from '../components/dashboards/GenericDashboard';
-import { User } from '../types';
+import { UserRole } from '../types';
 
 const DashboardPage: React.FC = () => {
     return (
@@ -22,42 +22,28 @@ const DashboardPage: React.FC = () => {
     );
 };
 
-const ROLE_HIERARCHY: User['roles'][number][] = ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'maintenance', 'viewer'];
-
-const getPrimaryRole = (roles: User['roles']): User['roles'][number] => {
-    if (!roles || roles.length === 0) return 'viewer'; // default
-    for (const role of ROLE_HIERARCHY) {
-        if (roles.includes(role)) {
-            return role;
-        }
-    }
-    return roles[0]; // fallback
-};
-
-
 const DashboardContent: React.FC = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
     const { data, loading } = useDashboardData();
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
-    const { settings } = useDashboardSettings();
-
+    
     const renderDashboard = () => {
-        if (!data || !user) return null;
+        if (!data || !user?.role) return <GenericDashboard data={data!} />;
 
-        const primaryRole = getPrimaryRole(user.roles);
+        const primaryRole = user.role;
 
         switch (primaryRole) {
-            case 'super_admin':
-            case 'admin':
+            case 'SUPER_ADMIN':
+            case 'ADMIN':
                 return <AdminDashboard data={data} />;
-            case 'manager':
+            case 'MANAGER':
                 return <ManagerDashboard data={data} />;
-            case 'supervisor':
+            case 'SUPERVISOR':
                 return <SupervisorDashboard data={data} />;
-            case 'hr':
+            case 'HR':
                 return <HRDashboard data={data} />;
-            case 'maintenance':
+            case 'MAINTENANCE':
                 return <MaintenanceDashboard data={data} />;
             default:
                 return <GenericDashboard data={data} />;
@@ -70,6 +56,10 @@ const DashboardContent: React.FC = () => {
                 <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
+    }
+    
+    if (!data) {
+         return <div>{t('errors.fetchFailed')}</div>;
     }
 
     return (

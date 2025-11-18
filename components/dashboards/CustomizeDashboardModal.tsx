@@ -1,37 +1,24 @@
 
-
 import React from 'react';
 import { useDashboardSettings, DashboardSettings } from '../../context/DashboardSettingsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { User } from '../../types';
+import { UserRole } from '../../types';
 
 interface CustomizeDashboardModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const ROLE_HIERARCHY: User['roles'][number][] = ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'maintenance', 'viewer'];
-
-const getPrimaryRole = (roles: User['roles']): User['roles'][number] => {
-    if (!roles || roles.length === 0) return 'viewer'; // default
-    for (const role of ROLE_HIERARCHY) {
-        if (roles.includes(role)) {
-            return role;
-        }
-    }
-    return roles[0]; // fallback
-};
-
 // Define which widgets are available for each role
-const roleWidgets: Record<User['roles'][number], (keyof DashboardSettings)[]> = {
-    super_admin: ['stats', 'occupancyChart', 'distributionChart', 'recentActivity', 'occupancyRadialChart'],
-    admin: ['stats', 'occupancyChart', 'distributionChart', 'recentActivity', 'occupancyRadialChart'],
-    manager: ['stats', 'alerts', 'occupancyChart', 'distributionChart', 'occupancyRadialChart'],
-    supervisor: ['stats', 'availableRooms', 'maintenanceList'],
-    hr: ['stats', 'alerts', 'distributionChart'],
-    maintenance: ['stats', 'maintenanceList'],
-    viewer: ['stats']
+const roleWidgets: Record<UserRole, (keyof DashboardSettings)[]> = {
+    SUPER_ADMIN: ['stats', 'occupancyChart'],
+    ADMIN: ['stats', 'occupancyChart'],
+    MANAGER: ['stats', 'alerts', 'occupancyChart', 'distributionChart'],
+    SUPERVISOR: ['stats', 'availableRooms'],
+    HR: ['stats', 'alerts', 'distributionChart'],
+    MAINTENANCE: ['stats', 'maintenanceList'],
+    VIEWER: ['stats']
 };
 
 
@@ -42,8 +29,8 @@ const CustomizeDashboardModal: React.FC<CustomizeDashboardModalProps> = ({ isOpe
 
     if (!isOpen) return null;
 
-    const primaryRole = getPrimaryRole(user!.roles);
-    const availableWidgets = roleWidgets[primaryRole] || roleWidgets.viewer;
+    const primaryRole = user?.role || 'VIEWER';
+    const availableWidgets = roleWidgets[primaryRole] || roleWidgets.VIEWER;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

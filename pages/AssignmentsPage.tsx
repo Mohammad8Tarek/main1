@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Assignment, Employee, Room, Building, Floor, Reservation, DEPARTMENTS, departmentJobTitles, ReservationGuest, Hosting } from '../types';
-import { assignmentApi, employeeApi, roomApi, buildingApi, floorApi, reservationApi, hostingApi } from '../services/apiService';
+import { assignmentApi, employeeApi, roomApi, buildingApi, floorApi, logActivity, reservationApi, hostingApi } from '../services/apiService';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -30,7 +30,8 @@ const ReservationsPage: React.FC = () => {
     const { user } = useAuth();
     const { language, t } = useLanguage();
     const { showToast } = useToast();
-    const canManage = user?.roles?.some(r => ['super_admin', 'admin', 'manager', 'supervisor'].includes(r));
+    // FIX: Correct property access from `user.roles` to `user.role` and check against uppercase role names.
+    const canManage = user?.role && ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR'].includes(user.role);
     const [activeTab, setActiveTab] = useState<'assignments' | 'reservations' | 'hosting' | 'history'>('assignments');
     const { settings: exportSettings } = useExportSettings();
 
@@ -117,6 +118,7 @@ const ReservationsPage: React.FC = () => {
     // --- Memos for performance ---
     const employeeMap = useMemo(() => new Map(employees.map(e => [e.id, e])), [employees]);
     const roomMap = useMemo(() => new Map(rooms.map(r => [r.id, r.roomNumber])), [rooms]);
+    // FIX: Change roomId parameter type from number to string to match the Room type.
     const getRoomBuildingName = (roomId: string) => {
         const room = rooms.find(r => r.id === roomId);
         if (!room) return '';
@@ -127,13 +129,16 @@ const ReservationsPage: React.FC = () => {
     };
     const availableEmployees = useMemo(() => {
         const assignedIds = new Set(assignments.filter(a => !a.checkOutDate).map(a => a.employeeId));
-        return employees.filter(e => e.status === 'active' && !assignedIds.has(e.id));
+        // FIX: Change status check to uppercase 'ACTIVE'.
+        return employees.filter(e => e.status === 'ACTIVE' && !assignedIds.has(e.id));
     }, [employees, assignments]);
-    const availableRooms = useMemo(() => rooms.filter(r => r.currentOccupancy < r.capacity && r.status !== 'maintenance' && r.status !== 'reserved'), [rooms]);
+    // FIX: Change status checks to uppercase 'MAINTENANCE' and 'RESERVED'.
+    const availableRooms = useMemo(() => rooms.filter(r => r.currentOccupancy < r.capacity && r.status !== 'MAINTENANCE' && r.status !== 'RESERVED'), [rooms]);
     const housedEmployees = useMemo(() => {
         const housedEmployeeIds = new Set(assignments.filter(a => !a.checkOutDate).map(a => a.employeeId));
         return employees.filter(e => housedEmployeeIds.has(e.id));
     }, [employees, assignments]);
+    // FIX: Update Map generic types to use strings for IDs instead of numbers.
     const employeeRoomMap = useMemo(() => {
         const map = new Map<string, string>();
         assignments.filter(a => !a.checkOutDate).forEach(a => map.set(a.employeeId, a.roomId));
@@ -162,16 +167,20 @@ const ReservationsPage: React.FC = () => {
             return;
         }
         try {
+            // FIX: Remove parseInt for string IDs.
             const assignmentData = {
-                employeeId,
-                roomId,
+                employeeId: employeeId,
+                roomId: roomId,
                 checkInDate: new Date(checkInDate).toISOString(),
                 expectedCheckOutDate: expectedCheckOutDate ? new Date(expectedCheckOutDate).toISOString() : null,
                 checkOutDate: null,
             };
             await assignmentApi.create(assignmentData);
             const room = rooms.find(r => r.id === assignmentData.roomId);
-            if(room) await roomApi.update(room.id, { currentOccupancy: room.currentOccupancy + 1, status: room.currentOccupancy + 1 >= room.capacity ? 'occupied' : room.status });
+            // FIX: Change status string to uppercase 'OCCUPIED'.
+            if(room) await roomApi.update(room.id, { currentOccupancy: room.currentOccupancy + 1, status: room.currentOccupancy + 1 >= room.capacity ? 'OCCUPIED' : room.status });
+            const employee = employeeMap.get(assignmentData.employeeId);
+            logActivity(user!.username, `Assigned employee ${employee?.firstName} ${employee?.lastName} to room ${roomMap.get(assignmentData.roomId)}`);
             showToast(t('reservations.added'), 'success');
             setIsAssignmentModalOpen(false);
             await fetchData();
@@ -194,8 +203,11 @@ const ReservationsPage: React.FC = () => {
             const room = rooms.find(r => r.id === assignmentToCheckOut.roomId);
             if(room) {
                 const newOccupancy = room.currentOccupancy > 0 ? room.currentOccupancy - 1 : 0;
-                await roomApi.update(room.id, { currentOccupancy: newOccupancy, status: newOccupancy === 0 ? 'available' : room.status });
+                // FIX: Change status string to uppercase 'AVAILABLE'.
+                await roomApi.update(room.id, { currentOccupancy: newOccupancy, status: newOccupancy === 0 ? 'AVAILABLE' : room.status });
             }
+            const employee = employeeMap.get(assignmentToCheckOut.employeeId);
+            logActivity(user!.username, `Checked out employee: ${employee?.firstName} ${employee?.lastName}`);
             showToast(t('reservations.checkedOut'), 'success');
         } catch(error) {
             showToast(t('errors.generic'), 'error');
@@ -263,6 +275,7 @@ const ReservationsPage: React.FC = () => {
             setIsSubmitting(false); return;
         }
         
+        // FIX: Remove parseInt from string ID comparison.
         const room = rooms.find(r => r.id === roomId);
         if (room && guests.length > (room.capacity - room.currentOccupancy)) {
              showToast(t('errors.roomCapacityExceeded'), 'error');
@@ -272,6 +285,7 @@ const ReservationsPage: React.FC = () => {
         try {
             await reservationApi.create({
                 ...rest,
+                // FIX: Remove parseInt for string ID.
                 roomId: roomId,
                 checkInDate: new Date(checkInDate).toISOString(),
                 checkOutDate: rest.checkOutDate ? new Date(rest.checkOutDate).toISOString() : null,
@@ -281,7 +295,11 @@ const ReservationsPage: React.FC = () => {
                 guestPhone: primaryGuest.guestPhone,
                 guests: JSON.stringify(guests),
             });
-             if(room) await roomApi.update(room.id, { status: 'reserved' });
+             // FIX: Change status string to uppercase 'RESERVED'.
+             if(room) await roomApi.update(room.id, { status: 'RESERVED' });
+
+            // FIX: Remove parseInt for string ID.
+            logActivity(user!.username, `Reserved room ${roomMap.get(roomId)} for ${primaryGuest.firstName} ${primaryGuest.lastName}`);
             showToast(t('reservations.resAdded'), 'success');
             setIsReservationModalOpen(false);
             await fetchData();
@@ -294,6 +312,7 @@ const ReservationsPage: React.FC = () => {
         setIsSubmitting(true);
         try {
             await reservationApi.delete(reservation.id);
+            logActivity(user!.username, `Canceled reservation for ${reservation.firstName} ${reservation.lastName}`);
             showToast(t('reservations.resCanceled'), 'success');
             await fetchData();
         } catch (error) { showToast(t('errors.generic'), 'error');
@@ -310,6 +329,7 @@ const ReservationsPage: React.FC = () => {
         if (!reservationToAssign || !selectedEmployeeForReservation) return;
         setIsSubmitting(true);
         try {
+            // FIX: Remove parseInt for string ID.
             const assignmentData = {
                 employeeId: selectedEmployeeForReservation,
                 roomId: reservationToAssign.roomId,
@@ -319,9 +339,12 @@ const ReservationsPage: React.FC = () => {
             };
             await assignmentApi.create(assignmentData);
             const room = rooms.find(r => r.id === assignmentData.roomId);
-            if(room) await roomApi.update(room.id, { currentOccupancy: room.currentOccupancy + 1, status: 'occupied' });
+            // FIX: Change status string to uppercase 'OCCUPIED'.
+            if(room) await roomApi.update(room.id, { currentOccupancy: room.currentOccupancy + 1, status: 'OCCUPIED' });
             await reservationApi.delete(reservationToAssign.id);
 
+            const employee = employeeMap.get(assignmentData.employeeId);
+            logActivity(user!.username, `Converted reservation to assignment for ${employee?.firstName} ${employee?.lastName}`);
             showToast(t('reservations.resConverted'), 'success');
             setIsAssignModalOpen(false);
             await fetchData();
@@ -372,6 +395,7 @@ const ReservationsPage: React.FC = () => {
              return;
         }
 
+        // FIX: Remove parseInt from string ID.
         const hostEmployeeId = employeeId;
         const hostAssignment = assignments.find(a => a.employeeId === hostEmployeeId && !a.checkOutDate);
         let room: Room | undefined;
@@ -397,13 +421,16 @@ const ReservationsPage: React.FC = () => {
                 endDate: new Date(endDate).toISOString(),
                 notes: notes || null,
                 guests: JSON.stringify(guests),
-                status: 'active',
+                // FIX: Change status string to uppercase 'ACTIVE'.
+                status: 'ACTIVE',
             });
 
             if (room) {
                 await roomApi.update(room.id, { currentOccupancy: room.currentOccupancy + guests.length });
             }
 
+            const employee = employeeMap.get(hostEmployeeId);
+            logActivity(user!.username, `Created hosting for ${primaryGuest.firstName} by ${employee?.firstName}`);
             showToast(t('reservations.hostingAdded'), 'success');
             setIsHostingModalOpen(false);
             await fetchData();
@@ -418,7 +445,8 @@ const ReservationsPage: React.FC = () => {
         if (!window.confirm(t('reservations.hostingConfirmEnd'))) return;
         setIsSubmitting(true);
         try {
-            await hostingApi.update(hosting.id, { status: 'completed' });
+            // FIX: Change status string to uppercase 'COMPLETED'.
+            await hostingApi.update(hosting.id, { status: 'COMPLETED' });
 
             const hostAssignment = assignments.find(a => a.employeeId === hosting.employeeId && !a.checkOutDate);
             if (hostAssignment) {
@@ -428,6 +456,8 @@ const ReservationsPage: React.FC = () => {
                     await roomApi.update(room.id, { currentOccupancy: Math.max(0, room.currentOccupancy - guestCount) });
                 }
             }
+
+            logActivity(user!.username, `Ended hosting for ${hosting.guestFirstName}`);
             showToast(t('reservations.hostingEnded'), 'success');
             await fetchData();
         } catch (error) {
@@ -515,6 +545,7 @@ const ReservationsPage: React.FC = () => {
             const { headers, data, reportTitle } = getExportData();
             const filename = `report_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`;
             exportToPdf({ headers, data, title: reportTitle, filename, settings: exportSettings, language });
+            logActivity(user!.username, `Exported ${activeTab} to PDF`);
         } catch (error) {
             console.error("PDF Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -531,6 +562,7 @@ const ReservationsPage: React.FC = () => {
             const { headers, data, reportTitle } = getExportData();
             const filename = `report_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`;
             exportToExcel({ headers, data, filename, settings: exportSettings });
+            logActivity(user!.username, `Exported ${activeTab} to Excel`);
         } catch (error) {
             console.error("Excel Export failed:", error);
             showToast(t('errors.generic'), 'error');
@@ -637,8 +669,10 @@ const ReservationsPage: React.FC = () => {
                             <td className="px-6 py-4">{roomId ? roomMap.get(roomId) : t('unknown')}</td>
                             <td className="px-6 py-4">{new Date(h.startDate).toLocaleDateString()}</td>
                             <td className="px-6 py-4">{new Date(h.endDate).toLocaleDateString()}</td>
-                            <td className="px-6 py-4">{t(`statuses.${h.status}`)}</td>
-                            {canManage && h.status === 'active' && <td className="px-6 py-4"><button onClick={() => handleEndHosting(h)} className="font-medium text-primary-600 dark:text-primary-500 hover:underline">{t('reservations.endHosting')}</button></td>}
+                            {/* FIX: Change status to lowercase to match translation keys. */}
+                            <td className="px-6 py-4">{t(`statuses.${h.status.toLowerCase()}`)}</td>
+                            {/* FIX: Correct status comparison to use uppercase 'ACTIVE'. */}
+                            {canManage && h.status === 'ACTIVE' && <td className="px-6 py-4"><button onClick={() => handleEndHosting(h)} className="font-medium text-primary-600 dark:text-primary-500 hover:underline">{t('reservations.endHosting')}</button></td>}
                         </tr>
                     )},
                     [t('reservations.hostEmployee'), t('reservations.guestName'), t('housing.roomNumber'), t('reservations.startDate'), t('reservations.endDate'), t('reservations.status'), ...(canManage ? [t('actions')] : [])]

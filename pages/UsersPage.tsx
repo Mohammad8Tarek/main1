@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { User } from '../types';
-import { userApi } from '../services/apiService';
+import { User, UserRole } from '../types';
+import { userApi, logActivity } from '../services/apiService';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -12,7 +11,7 @@ const UsersPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const { user: currentUser, logout } = useAuth();
+    const { user: currentUser } = useAuth();
     const { t } = useLanguage();
     const { showToast } = useToast();
 
@@ -20,8 +19,9 @@ const UsersPage: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [formData, setFormData] = useState({
         username: '',
-        roles: ['viewer'] as User['roles'],
-        status: 'active' as User['status'],
+        email: '',
+        role: 'VIEWER' as UserRole,
+        status: 'ACTIVE' as User['status'],
         password: '',
     });
 
@@ -37,7 +37,7 @@ const UsersPage: React.FC = () => {
         setLoading(true);
         try {
             const data = await userApi.getAll();
-            setUsers(data as User[]);
+            setUsers(data);
         } catch (error) {
             console.error("Failed to fetch users", error);
             showToast(t('errors.fetchFailed'), 'error');
@@ -52,7 +52,8 @@ const UsersPage: React.FC = () => {
 
     const filteredUsers = useMemo(() => {
         return users.filter(user =>
-            user.username.toLowerCase().includes(searchTerm.toLowerCase())
+            user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [users, searchTerm]);
 
@@ -69,7 +70,7 @@ const UsersPage: React.FC = () => {
 
     const openAddModal = () => {
         setEditingUser(null);
-        setFormData({ username: '', roles: ['viewer'], status: 'active', password: '' });
+        setFormData({ username: '', email: '', role: 'VIEWER', status: 'ACTIVE', password: '' });
         setIsModalOpen(true);
     };
 
@@ -83,50 +84,28 @@ const UsersPage: React.FC = () => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-    
-    const handleRolesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, checked } = e.target;
-        const role = name as User['roles'][number];
-        setFormData(prev => {
-            const newRoles = checked
-                ? [...prev.roles, role]
-                : prev.roles.filter(r => r !== role);
-            
-            if (newRoles.length === 0) {
-                return { ...prev, roles: ['viewer'] };
-            }
-            return { ...prev, roles: newRoles };
-        });
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const isDuplicate = users.some(
-            user => user.username.trim().toLowerCase() === formData.username.trim().toLowerCase() && user.id !== editingUser?.id
+            user => (user.username.trim().toLowerCase() === formData.username.trim().toLowerCase() || user.email.trim().toLowerCase() === formData.email.trim().toLowerCase()) && user.id !== editingUser?.id
         );
         if (isDuplicate) {
-            showToast(t('errors.duplicateUsername', { username: formData.username }), 'error');
+            showToast(t('errors.duplicateUsername'), 'error');
             return;
         }
 
         setIsSubmitting(true);
         try {
             if (editingUser) {
-                const updateData: Partial<Omit<User, 'id'>> & { password?: string } = {
-                    username: formData.username,
-                    roles: formData.roles,
-                    status: formData.status
-                };
-                if (formData.password) {
-                    if (formData.password.length < 6) {
-                        showToast(t('errors.passwordTooShort'), 'error');
-                        setIsSubmitting(false);
-                        return;
-                    }
-                    updateData.password = formData.password;
+                const { password, ...updateData } = formData;
+                const payload: Partial<User> & { password?: string } = updateData;
+                if (password) {
+                    payload.password = password;
                 }
-                await userApi.update(editingUser.id, updateData);
+                await userApi.update(editingUser.id, payload);
+                logActivity(currentUser!.username, `Updated user: ${formData.username}`);
                 showToast(t('users.updated'), 'success');
             } else {
                 if (!formData.password) {
@@ -134,19 +113,15 @@ const UsersPage: React.FC = () => {
                     setIsSubmitting(false);
                     return;
                 }
-                 if (formData.password.length < 6) {
-                    showToast(t('errors.passwordTooShort'), 'error');
-                    setIsSubmitting(false);
-                    return;
-                }
                 await userApi.create(formData);
+                logActivity(currentUser!.username, `Created user: ${formData.username}`);
                 showToast(t('users.added'), 'success');
             }
             setIsModalOpen(false);
             await fetchUsers();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to save user", error);
-            showToast(t('errors.generic'), 'error');
+            showToast(error.message || t('errors.generic'), 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -160,6 +135,7 @@ const UsersPage: React.FC = () => {
         if (!window.confirm(t('users.deleteConfirm', { name: userToDelete.username }))) return;
         try {
             await userApi.delete(userToDelete.id);
+            logActivity(currentUser!.username, `Deleted user: ${userToDelete.username}`);
             showToast(t('users.deleted'), 'success');
             await fetchUsers();
         } catch (error) {
@@ -173,9 +149,10 @@ const UsersPage: React.FC = () => {
             showToast(t('users.cannotChangeSelf'), 'error');
             return;
         }
-        const newStatus = userToToggle.status === 'active' ? 'inactive' : 'active';
+        const newStatus = userToToggle.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
         try {
             await userApi.update(userToToggle.id, { status: newStatus });
+            logActivity(currentUser!.username, `Set user ${userToToggle.username} status to ${newStatus}`);
             showToast(t('users.statusUpdated'), 'success');
             await fetchUsers();
         } catch (error) {
@@ -192,13 +169,10 @@ const UsersPage: React.FC = () => {
 
     const handleResetPassword = async () => {
         if (!userToResetPassword || !newPassword) return;
-        if (newPassword.length < 6) {
-            showToast(t('errors.passwordTooShort'), 'error');
-            return;
-        }
         setIsSubmitting(true);
         try {
             await userApi.update(userToResetPassword.id, { password: newPassword });
+            logActivity(currentUser!.username, `Reset password for user: ${userToResetPassword.username}`);
             showToast(t('users.resetPasswordSuccess'), 'success');
             setIsResetPasswordModalOpen(false);
         } catch (error) {
@@ -209,13 +183,13 @@ const UsersPage: React.FC = () => {
     };
 
     const getStatusBadge = (status: User['status']) => {
-        return status === 'active'
+        return status === 'ACTIVE'
             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
             : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
     };
 
     const formInputClass = "w-full p-2 border border-slate-300 rounded bg-slate-50 dark:bg-slate-700 dark:border-slate-600 text-slate-900 dark:text-slate-200";
-    const allRoles: User['roles'][number][] = ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'maintenance', 'viewer'];
+    const allRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'HR', 'MAINTENANCE', 'VIEWER'];
 
     return (
         <>
@@ -249,14 +223,14 @@ const UsersPage: React.FC = () => {
                                     {paginatedUsers.map(user => (
                                         <tr key={user.id} className="bg-white border-b dark:bg-slate-800 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600">
                                             <th scope="row" className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap dark:text-white">{user.username}</th>
-                                            <td className="px-6 py-4">{user.roles.map(r => t(`roles.${r}`)).join(', ')}</td>
+                                            <td className="px-6 py-4">{t(`roles.${user.role.toLowerCase()}`)}</td>
                                             <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(user.status)}`}>{t(`statuses.${user.status}`)}</span>
+                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(user.status)}`}>{t(`statuses.${user.status.toLowerCase()}`)}</span>
                                             </td>
                                             <td className="px-6 py-4 space-x-2 rtl:space-x-reverse whitespace-nowrap">
-                                                <button onClick={() => openResetPasswordModal(user)} className="font-medium text-blue-600 dark:text-blue-500 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed" disabled={user.id === currentUser?.id}>{t('users.resetPassword')}</button>
+                                                <button onClick={() => openResetPasswordModal(user)} className="font-medium text-blue-600 dark:text-blue-500 hover:underline">{t('users.resetPassword')}</button>
                                                 <button onClick={() => toggleUserStatus(user)} className="font-medium text-yellow-600 dark:text-yellow-500 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed" disabled={user.id === currentUser?.id}>
-                                                    {t(`users.toggleStatus.${user.status}`)}
+                                                    {t(`users.toggleStatus.${user.status.toLowerCase()}`)}
                                                 </button>
                                                 <button onClick={() => openEditModal(user)} className="font-medium text-primary-600 dark:text-primary-500 hover:underline">{t('edit')}</button>
                                                 <button onClick={() => handleDelete(user)} className="font-medium text-red-600 dark:text-red-500 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed" disabled={user.id === currentUser?.id}>{t('delete')}</button>
@@ -290,26 +264,17 @@ const UsersPage: React.FC = () => {
                             <div className="space-y-4">
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.username')}</label><input type="text" name="username" value={formData.username} onChange={handleFormChange} required className={formInputClass}/></div>
-                                    {editingUser && (<div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="active">{t('statuses.active')}</option><option value="inactive">{t('statuses.inactive')}</option></select></div>)}
-                                    <div className="md:col-span-2"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.password')}</label><input type="password" name="password" value={formData.password} placeholder={editingUser ? t('users.passwordPlaceholder') : ''} onChange={handleFormChange} required={!editingUser} className={formInputClass}/></div>
-                               </div>
-                               <div>
-                                    <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.role')}</label>
-                                    <div className="grid grid-cols-3 gap-2 p-2 border rounded-md border-slate-300 dark:border-slate-600">
-                                        {allRoles.map((roleKey) => (
-                                            <label key={roleKey} htmlFor={`role-${roleKey}`} className="flex items-center space-x-2 rtl:space-x-reverse cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    id={`role-${roleKey}`}
-                                                    name={roleKey}
-                                                    checked={formData.roles.includes(roleKey)}
-                                                    onChange={handleRolesChange}
-                                                    className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                                />
-                                                <span className="text-sm text-slate-700 dark:text-slate-300">{t(`roles.${roleKey}`)}</span>
-                                            </label>
-                                        ))}
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Email</label><input type="email" name="email" value={formData.email} onChange={handleFormChange} required className={formInputClass}/></div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.role')}</label>
+                                        <select name="role" value={formData.role} onChange={handleFormChange} className={formInputClass}>
+                                            {allRoles.map(roleKey => (
+                                                <option key={roleKey} value={roleKey}>{t(`roles.${roleKey.toLowerCase()}`)}</option>
+                                            ))}
+                                        </select>
                                     </div>
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.status')}</label><select name="status" value={formData.status} onChange={handleFormChange} className={formInputClass}><option value="ACTIVE">{t('statuses.active')}</option><option value="INACTIVE">{t('statuses.inactive')}</option></select></div>
+                                    <div className="md:col-span-2"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('users.password')}</label><input type="password" name="password" value={formData.password} placeholder={editingUser ? t('users.passwordPlaceholder') : ''} onChange={handleFormChange} required={!editingUser} className={formInputClass}/></div>
                                </div>
                             </div>
                             <div className="flex justify-end gap-4 mt-6">

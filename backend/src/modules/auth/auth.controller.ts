@@ -1,12 +1,18 @@
+
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import asyncHandler from '../../utils/asyncHandler';
 import { authService } from './auth.service';
 import ApiResponse from '../../utils/apiResponse';
 
+const register = asyncHandler(async (req: Request, res: Response) => {
+    const user = await authService.register(req.body);
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, user, 'User registered successfully'));
+});
+
 const login = asyncHandler(async (req: Request, res: Response) => {
-    const { username, password } = req.body;
-    const result = await authService.login(username, password);
+    const { identifier, password } = req.body;
+    const result = await authService.login(identifier, password);
     res.status(httpStatus.OK).send(new ApiResponse(httpStatus.OK, result, 'Login successful'));
 });
 
@@ -23,6 +29,7 @@ const logout = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const authController = {
+    register,
     login,
     refreshToken,
     logout,

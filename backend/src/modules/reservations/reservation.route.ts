@@ -1,20 +1,19 @@
+
 import { Router } from 'express';
-import validate from '../../middleware/validate.middleware';
 import { reservationController } from './reservation.controller';
-import { reservationValidation } from './reservation.validation';
 import { authMiddleware } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-router.use(authMiddleware(['super_admin', 'admin', 'manager', 'supervisor', 'hr']));
+router.use(authMiddleware(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPERVISOR']));
 
 router.route('/')
-    .post(validate(reservationValidation.createReservation), reservationController.createReservation)
-    .get(reservationController.getAllReservations);
+    .get(reservationController.getAll)
+    .post(reservationController.create);
 
 router.route('/:id')
-    .get(validate(reservationValidation.getReservation), reservationController.getReservationById)
-    .patch(validate(reservationValidation.updateReservation), reservationController.updateReservation)
-    .delete(validate(reservationValidation.deleteReservation), reservationController.deleteReservation);
+    .get(reservationController.getById)
+    .patch(reservationController.update)
+    .delete(reservationController.delete);
 
 export default router;

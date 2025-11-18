@@ -59,11 +59,11 @@ const useDashboardData = () => {
             // --- CALCULATIONS ---
 
             // Stats
-            const activeEmployees = employees.filter(e => e.status === 'active');
+            const activeEmployees = employees.filter(e => e.status === 'ACTIVE');
             const housedEmployeeIds = new Set(assignments.filter(a => !a.checkOutDate).map(a => a.employeeId));
             const unhousedEmployees = activeEmployees.filter(e => !housedEmployeeIds.has(e.id)).length;
-            const occupiedOrReservedRooms = rooms.filter(r => r.status === 'occupied' || r.status === 'reserved').length;
-            const availableRooms = rooms.filter(r => r.status === 'available').length;
+            const occupiedOrReservedRooms = rooms.filter(r => r.status === 'OCCUPIED' || r.status === 'RESERVED').length;
+            const availableRooms = rooms.filter(r => r.status === 'AVAILABLE').length;
             const occupancyRate = rooms.length > 0 ? Math.round((occupiedOrReservedRooms / rooms.length) * 100) : 0;
             
             const today = new Date();
@@ -76,7 +76,7 @@ const useDashboardData = () => {
             });
 
             const overdueMaintenance = maintenanceRequests.filter(req => 
-                req.status !== 'resolved' && req.dueDate && new Date(req.dueDate) < today
+                req.status !== 'RESOLVED' && req.dueDate && new Date(req.dueDate) < today
             );
 
 
@@ -84,26 +84,28 @@ const useDashboardData = () => {
             const floorToBuildingMap = new Map(floors.map(f => [f.id, f.buildingId]));
             const occupancyByBuilding = buildings.map(building => {
                 const buildingRooms = rooms.filter(r => floorToBuildingMap.get(r.floorId) === building.id);
-                const occupied = buildingRooms.filter(r => r.status === 'occupied' || r.status === 'reserved').length;
+                const occupied = buildingRooms.filter(r => r.status === 'OCCUPIED' || r.status === 'RESERVED').length;
                 return { name: building.name, occupancy: occupied, total: buildingRooms.length };
             });
 
-            const employeeDistributionByDept = activeEmployees.reduce((acc: Record<string, number>, emp) => {
+            // FIX: Explicitly type the initial value in reduce to prevent 'value' from being inferred as 'unknown'.
+            const employeeDistributionByDept = activeEmployees.reduce((acc, emp) => {
                 acc[emp.department] = (acc[emp.department] || 0) + 1;
                 return acc;
-            }, {});
+            }, {} as Record<string, number>);
 
-            const maintenanceStatusDistribution = maintenanceRequests.reduce((acc: Record<string, number>, req) => {
+            // FIX: Explicitly type the initial value in reduce to prevent 'value' from being inferred as 'unknown'.
+            const maintenanceStatusDistribution = maintenanceRequests.reduce((acc, req) => {
                 acc[req.status] = (acc[req.status] || 0) + 1;
                 return acc;
-            }, {});
+            }, {} as Record<string, number>);
 
-            const userRoleDistribution = users.reduce((acc: Record<string, number>, user) => {
-                user.roles.forEach(role => {
-                    acc[role] = (acc[role] || 0) + 1;
-                });
+            // FIX: Explicitly type the initial value in reduce to prevent 'value' from being inferred as 'unknown'.
+            const userRoleDistribution = users.reduce((acc, user) => {
+                const role = user.role;
+                acc[role] = (acc[role] || 0) + 1;
                 return acc;
-            }, {});
+            }, {} as Record<string, number>);
 
 
             setData({
@@ -117,7 +119,7 @@ const useDashboardData = () => {
                     occupiedRooms: occupiedOrReservedRooms,
                     availableRooms,
                     occupancyRate,
-                    openMaintenance: maintenanceRequests.filter(m => m.status === 'open' || m.status === 'in_progress').length,
+                    openMaintenance: maintenanceRequests.filter(m => m.status === 'OPEN' || m.status === 'IN_PROGRESS').length,
                     expiringContracts,
                     overdueMaintenance,
                 },
@@ -136,17 +138,15 @@ const useDashboardData = () => {
     }, []);
 
     useEffect(() => {
-        fetchData(); // Initial fetch
-
         const handleDataChange = () => {
             fetchData();
         };
 
-        window.addEventListener('datachanged', handleDataChange);
+        // Initial fetch
+        fetchData();
 
-        return () => {
-            window.removeEventListener('datachanged', handleDataChange);
-        };
+        // No need to listen for 'datachanged' event since data is fetched from the backend.
+        // We can implement polling or websockets later if real-time updates are needed.
     }, [fetchData]);
 
     return { data, loading };

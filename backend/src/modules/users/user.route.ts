@@ -1,3 +1,4 @@
+
 import { Router } from 'express';
 import validate from '../../middleware/validate.middleware';
 import { userController } from './user.controller';
@@ -6,13 +7,13 @@ import { authMiddleware } from '../../middleware/auth.middleware';
 
 const router = Router();
 
-router.use(authMiddleware(['super_admin', 'admin']));
+router.patch('/me/change-password', authMiddleware(), validate(userValidation.changePassword), userController.changePassword);
+
+router.use(authMiddleware(['SUPER_ADMIN', 'ADMIN']));
 
 router.route('/')
     .post(validate(userValidation.createUser), userController.createUser)
     .get(userController.getAllUsers);
-
-router.post('/:id/change-password', validate(userValidation.changePassword), userController.changePassword);
 
 router.route('/:id')
     .get(validate(userValidation.getUser), userController.getUserById)

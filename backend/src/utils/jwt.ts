@@ -1,15 +1,13 @@
+
 import jwt from 'jsonwebtoken';
 import config from '../config';
-import { User, Role } from '@prisma/client';
+import { User } from '@prisma/client';
 
-export const generateTokens = (user: { id: string, roles: Role[] }) => {
-    const accessTokenPayload = { id: user.id, roles: user.roles };
-    const refreshTokenPayload = { id: user.id };
-
-    const accessToken = jwt.sign(accessTokenPayload, config.jwt_secret, {
+export const generateTokens = (user: { id: string, role: string }) => {
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, config.jwt_secret, {
         expiresIn: config.jwt_expires_in,
     });
-    const refreshToken = jwt.sign(refreshTokenPayload, config.jwt_refresh_secret, {
+    const refreshToken = jwt.sign({ id: user.id }, config.jwt_refresh_secret, {
         expiresIn: config.jwt_refresh_expires_in,
     });
     return { accessToken, refreshToken };

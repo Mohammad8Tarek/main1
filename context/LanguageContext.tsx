@@ -1,6 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { translations } from '../services/translations';
+import { systemSettingsApi } from '../services/apiService';
 
 type Language = 'en' | 'ar';
 
@@ -14,18 +14,35 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
+  const [isInitialized, setIsInitialized] = useState(false);
+
 
   useEffect(() => {
-    const userPreferredLanguage = localStorage.getItem('language') as Language;
-    if (userPreferredLanguage && ['en', 'ar'].includes(userPreferredLanguage)) {
-        setLanguageState(userPreferredLanguage);
-    } else {
-        // Default to English if no valid language is found in storage
-        setLanguageState('en');
-    }
+    const initializeLanguage = async () => {
+        const userPreferredLanguage = localStorage.getItem('language') as Language;
+        if (userPreferredLanguage) {
+            setLanguageState(userPreferredLanguage);
+        } else {
+            try {
+                const settings = await systemSettingsApi.getSettings();
+                const defaultLang = settings.default_language as Language;
+                if (defaultLang === 'en' || defaultLang === 'ar') {
+                    setLanguageState(defaultLang);
+                }
+            } catch (error) {
+                // Silent failure fallback. 
+                // We don't want to alert the user on the login screen if the backend isn't immediately ready.
+                // console.debug("Could not fetch default language setting, falling back to English.");
+            }
+        }
+        setIsInitialized(true);
+    };
+    initializeLanguage();
   }, []);
 
   useEffect(() => {
+    if (!isInitialized) return;
+
     const root = document.documentElement;
     if (language === 'ar') {
       root.setAttribute('dir', 'rtl');
@@ -35,8 +52,31 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       root.setAttribute('lang', 'en');
     }
     localStorage.setItem('language', language);
-  }, [language]);
+  }, [language, isInitialized]);
 
+  useEffect(() => {
+    if (!isInitialized) return; // Only listen for changes after initial load
+
+    const handleSettingsChange = async (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.table === 'SystemVariables') {
+            const userPreferredLanguage = localStorage.getItem('language');
+            if (!userPreferredLanguage) { // Only change if user has no preference
+                try {
+                    const settings = await systemSettingsApi.getSettings();
+                    const defaultLang = settings.default_language as Language;
+                    if (defaultLang && (defaultLang === 'en' || defaultLang === 'ar')) {
+                        setLanguageState(defaultLang);
+                    }
+                } catch (error) {
+                    // Ignore refetch errors
+                }
+            }
+        }
+    };
+    window.addEventListener('datachanged', handleSettingsChange);
+    return () => window.removeEventListener('datachanged', handleSettingsChange);
+}, [isInitialized]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

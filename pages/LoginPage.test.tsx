@@ -1,12 +1,14 @@
 import React from 'react';
+// FIX: Import jest globals to resolve TypeScript errors.
 import { describe, beforeEach, it, expect, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import LoginPage from './LoginPage';
-import { authApi } from '../services/apiService';
+import { authApi, resetDatabase } from '../services/apiService';
 import '@testing-library/jest-dom';
 import type { User } from '../types';
 
 // Mock the API module
+// FIX: Moved `jest.requireActual` inside the mock factory to avoid hoisting issues and correctly typed the original module to prevent spread operator and property access errors.
 jest.mock('../services/apiService', () => {
   const originalModule = jest.requireActual<typeof import('../services/apiService')>('../services/apiService');
   return {
@@ -15,25 +17,30 @@ jest.mock('../services/apiService', () => {
       ...originalModule.authApi,
       login: jest.fn(),
     },
-    resetDatabase: jest.fn().mockResolvedValue(undefined),
+    // FIX: Call mockResolvedValue with `undefined` to resolve with 'undefined'. This correctly matches the Promise<void> type and avoids TypeScript inference errors.
+    resetDatabase: jest.fn().mockResolvedValue(undefined), // Add mock for resetDatabase
   };
 });
 
 
-type LoginApiFunction = (credentials: { username: string; password: string; }) => Promise<{ user: User; token: string }>;
+// FIX: The original type assertion for `jest.Mock` was incorrect, as it expects a function signature, not a Promise type.
+// A type alias for the login function signature is defined here to provide strong typing for the mock.
+type LoginApiFunction = (credentials: { identifier: string; password: string; }) => Promise<{ user: User; tokens: { accessToken: string; refreshToken: string; }; }>;
 const mockedLogin = authApi.login as jest.Mock<LoginApiFunction>;
+const mockedResetDatabase = resetDatabase as jest.Mock;
 
 describe('LoginPage', () => {
   beforeEach(async () => {
     // Reset mocks and storage before each test
     mockedLogin.mockClear();
+    mockedResetDatabase.mockClear();
     localStorage.clear();
     sessionStorage.clear();
   });
 
   it('renders login form correctly', () => {
     render(<LoginPage />);
-    expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email or Username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
   });
@@ -48,10 +55,10 @@ describe('LoginPage', () => {
   });
 
   it('calls the login api and displays loading state on submit', async () => {
-    mockedLogin.mockResolvedValue({ user: { id: 'clx123', username: 'admin', roles: ['admin'], status: 'active' }, token: 'fake-token' });
+    mockedLogin.mockResolvedValue({ user: { id: '1', username: 'admin', role: 'ADMIN', status: 'ACTIVE', email: 'test@test.com' }, tokens: {accessToken: 'fake-token', refreshToken: 'fake-refresh'} });
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText(/Email or Username/i), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'admin' } });
     fireEvent.click(screen.getByRole('button', { name: /login/i }));
     
@@ -60,7 +67,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: /loading/i })).toBeDisabled();
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith({ username: 'admin', password: 'admin' });
+      expect(authApi.login).toHaveBeenCalledWith({ identifier: 'admin', password: 'admin' });
     });
   });
 
@@ -70,7 +77,7 @@ describe('LoginPage', () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'wrong' } });
+    fireEvent.change(screen.getByLabelText(/Email or Username/i), { target: { value: 'wrong' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: /login/i }));
 
@@ -79,4 +86,8 @@ describe('LoginPage', () => {
     expect(errorElement).toBeInTheDocument();
   });
 
+  // Note: Testing the actual navigation/redirect is complex as it involves
+  // the state of the AuthProvider. The most important part is that the `login` function
+  // from the context is called, which we can infer from the successful API call.
+  // A more advanced test would involve a mock provider.
 });
